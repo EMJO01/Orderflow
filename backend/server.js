@@ -63,6 +63,47 @@ app.delete('/products/:id', async (req, res) => {
   res.json({ success: true });
 });
 
+// Signup route
+app.post('/signup', async (req, res) => {
+  const { name, business_name, email, whatsapp_number, business_type, about, password } = req.body;
+
+  const { data: existing } = await supabase
+    .from('vendors')
+    .select('id')
+    .eq('email', email)
+    .single();
+
+  if (existing) return res.json({ success: false, error: 'Email already registered' });
+
+  const { data, error } = await supabase
+    .from('vendors')
+    .insert([{ name, business_name, email, whatsapp_number, business_type, about, password, active: false }])
+    .select();
+
+  if (error) return res.json({ success: false, error: error.message });
+
+  console.log(`New signup: ${business_name} — ${email} — ${whatsapp_number}`);
+  res.json({ success: true });
+});
+
+// Login route
+app.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  const { data: vendor, error } = await supabase
+    .from('vendors')
+    .select('*')
+    .eq('email', email)
+    .eq('password', password)
+    .single();
+
+  if (error || !vendor) return res.json({ success: false, error: 'Invalid email or password' });
+  if (!vendor.active) return res.json({ success: false, error: 'Your account is pending approval. We will notify you within 48 hours.' });
+
+  res.json({ success: true, vendor: { id: vendor.id, name: vendor.name, business_name: vendor.business_name, email: vendor.email } });
+});
+
+// WhatsApp webhook
 app.use('/webhook', require('./webhook'));
 
 app.get('/', (req, res) => res.json({ message: 'Rady server running!' }));

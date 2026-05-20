@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OrderFlow — Get Started</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0F0F0F;--surface:#1A1A1A;--surface2:#222;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);
+  --text:#F0EDE8;--muted:#888480;
+  --accent:#25D366;--accent2:#1aad52;--accent-dim:rgba(37,211,102,0.12);
+  --radius:12px;--radius-sm:8px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.container{width:100%;max-width:480px;}
+.logo{text-align:center;margin-bottom:32px;}
+.logo-mark{font-family:'Syne',sans-serif;font-weight:800;font-size:28px;color:var(--accent);}
+.logo-sub{font-size:13px;color:var(--muted);margin-top:4px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;}
+.card-title{font-family:'Syne',sans-serif;font-size:22px;font-weight:700;margin-bottom:6px;}
+.card-sub{font-size:13px;color:var(--muted);margin-bottom:28px;line-height:1.5;}
+.form-row{margin-bottom:18px;}
+label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:7px;}
+input,select,textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s;}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);}
+input::placeholder,textarea::placeholder{color:var(--muted);}
+select option{background:var(--surface2);}
+textarea{resize:vertical;min-height:80px;}
+.btn{width:100%;padding:13px;border-radius:var(--radius-sm);font-size:14px;font-weight:600;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:all .15s;margin-top:8px;}
+.btn-primary{background:var(--accent);color:#000;}
+.btn-primary:hover{background:var(--accent2);}
+.btn-primary:disabled{opacity:0.6;cursor:not-allowed;}
+.divider{text-align:center;color:var(--muted);font-size:12px;margin:20px 0;position:relative;}
+.divider::before{content:'';position:absolute;top:50%;left:0;right:0;height:1px;background:var(--border);}
+.divider span{background:var(--surface);padding:0 12px;position:relative;}
+.login-link{text-align:center;font-size:13px;color:var(--muted);margin-top:16px;}
+.login-link a{color:var(--accent);text-decoration:none;font-weight:500;}
+.success-state{text-align:center;padding:20px 0;display:none;}
+.success-icon{font-size:48px;margin-bottom:16px;}
+.success-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;margin-bottom:8px;}
+.success-sub{font-size:13px;color:var(--muted);line-height:1.6;}
+.features{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:28px;}
+.feature{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;}
+.feature-icon{font-size:18px;margin-bottom:6px;}
+.feature-title{font-size:12px;font-weight:600;color:var(--text);}
+.feature-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.plan-badge{display:inline-flex;align-items:center;gap:6px;background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;margin-bottom:20px;}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo">
+    <div class="logo-mark">OrderFlow</div>
+    <div class="logo-sub">WhatsApp AI ordering system</div>
+  </div>
+
+  <div class="card">
+    <!-- Signup form -->
+    <div id="signup-form">
+      <div class="plan-badge">🚀 Free 7-day trial</div>
+      <div class="card-title">Get started free</div>
+      <div class="card-sub">Set up your WhatsApp AI ordering bot in 48 hours. No technical knowledge needed.</div>
+
+      <div class="features">
+        <div class="feature">
+          <div class="feature-icon">🤖</div>
+          <div class="feature-title">AI replies 24/7</div>
+          <div class="feature-sub">Never miss an order</div>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">📦</div>
+          <div class="feature-title">Easy catalog</div>
+          <div class="feature-sub">Add products in minutes</div>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">💬</div>
+          <div class="feature-title">WhatsApp native</div>
+          <div class="feature-sub">Customers use same app</div>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🇳🇬</div>
+          <div class="feature-title">Built for Nigeria</div>
+          <div class="feature-sub">₦ pricing, local support</div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label>Your Full Name</label>
+        <input type="text" id="f-name" placeholder="e.g. Amaka Johnson">
+      </div>
+      <div class="form-row">
+        <label>Business Name</label>
+        <input type="text" id="f-business" placeholder="e.g. Mama Tunde's Kitchen">
+      </div>
+      <div class="form-row">
+        <label>Email Address</label>
+        <input type="email" id="f-email" placeholder="you@example.com">
+      </div>
+      <div class="form-row">
+        <label>WhatsApp Number</label>
+        <input type="text" id="f-whatsapp" placeholder="+234 801 234 5678">
+      </div>
+      <div class="form-row">
+        <label>Business Type</label>
+        <select id="f-type">
+          <option value="">Select your business type</option>
+          <option>Food & Restaurant</option>
+          <option>Fashion & Clothing</option>
+          <option>Beauty & Skincare</option>
+          <option>Electronics</option>
+          <option>Grocery & Supermarket</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Tell us about your business</label>
+        <textarea id="f-about" placeholder="What do you sell? How many orders do you get per day?"></textarea>
+      </div>
+      <div class="form-row">
+        <label>Create a Password</label>
+        <input type="password" id="f-password" placeholder="Min 6 characters">
+      </div>
+
+      <button class="btn btn-primary" id="signup-btn" onclick="submitSignup()">Create My Account →</button>
+
+      <div class="divider"><span>already have an account?</span></div>
+      <div class="login-link"><a href="login.html">Log in to your dashboard</a></div>
+    </div>
+
+    <!-- Success state -->
+    <div class="success-state" id="success-state">
+      <div class="success-icon">🎉</div>
+      <div class="success-title">Application received!</div>
+      <div class="success-sub">
+        We'll review your details and set up your WhatsApp AI bot within <strong>48 hours</strong>.<br><br>
+        You'll receive a WhatsApp message on <span id="success-number"></span> once your account is ready.<br><br>
+        Questions? Message us on WhatsApp.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:10000';
+
+async function submitSignup() {
+  const name = document.getElementById('f-name').value.trim();
+  const business = document.getElementById('f-business').value.trim();
+  const email = document.getElementById('f-email').value.trim();
+  const whatsapp = document.getElementById('f-whatsapp').value.trim();
+  const type = document.getElementById('f-type').value;
+  const about = document.getElementById('f-about').value.trim();
+  const password = document.getElementById('f-password').value;
+
+  if (!name || !business || !email || !whatsapp || !type || !password) {
+    alert('Please fill in all fields');
+    return;
+  }
+
+  if (password.length < 6) {
+    alert('Password must be at least 6 characters');
+    return;
+  }
+
+  const btn = document.getElementById('signup-btn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+
+  try {
+    const res = await fetch(`${API}/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, business_name: business, email, whatsapp_number: whatsapp, business_type: type, about, password })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      document.getElementById('signup-form').style.display = 'none';
+      document.getElementById('success-state').style.display = 'block';
+      document.getElementById('success-number').textContent = whatsapp;
+    } else {
+      alert(data.error || 'Something went wrong. Please try again.');
+      btn.disabled = false;
+      btn.textContent = 'Create My Account →';
+    }
+  } catch(e) {
+    alert('Cannot reach server. Please try again.');
+    btn.disabled = false;
+    btn.textContent = 'Create My Account →';
+  }
+}
+</script>
+</body>
+</html>

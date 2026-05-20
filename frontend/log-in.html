@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OrderFlow — Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0F0F0F;--surface:#1A1A1A;--surface2:#222;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);
+  --text:#F0EDE8;--muted:#888480;
+  --accent:#25D366;--accent2:#1aad52;--accent-dim:rgba(37,211,102,0.12);
+  --radius:12px;--radius-sm:8px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.container{width:100%;max-width:420px;}
+.logo{text-align:center;margin-bottom:32px;}
+.logo-mark{font-family:'Syne',sans-serif;font-weight:800;font-size:28px;color:var(--accent);}
+.logo-sub{font-size:13px;color:var(--muted);margin-top:4px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;}
+.card-title{font-family:'Syne',sans-serif;font-size:22px;font-weight:700;margin-bottom:6px;}
+.card-sub{font-size:13px;color:var(--muted);margin-bottom:28px;}
+.form-row{margin-bottom:18px;}
+label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:7px;}
+input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s;}
+input:focus{border-color:var(--accent);}
+input::placeholder{color:var(--muted);}
+.btn{width:100%;padding:13px;border-radius:var(--radius-sm);font-size:14px;font-weight:600;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:all .15s;}
+.btn-primary{background:var(--accent);color:#000;}
+.btn-primary:hover{background:var(--accent2);}
+.btn-primary:disabled{opacity:0.6;cursor:not-allowed;}
+.error{background:rgba(255,68,68,0.1);border:1px solid rgba(255,68,68,0.3);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:#FF6B6B;margin-bottom:16px;display:none;}
+.signup-link{text-align:center;font-size:13px;color:var(--muted);margin-top:16px;}
+.signup-link a{color:var(--accent);text-decoration:none;font-weight:500;}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo">
+    <div class="logo-mark">OrderFlow</div>
+    <div class="logo-sub">WhatsApp AI ordering system</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Welcome back</div>
+    <div class="card-sub">Log in to manage your products and orders.</div>
+
+    <div class="error" id="error-msg"></div>
+
+    <div class="form-row">
+      <label>Email Address</label>
+      <input type="email" id="f-email" placeholder="you@example.com">
+    </div>
+    <div class="form-row">
+      <label>Password</label>
+      <input type="password" id="f-password" placeholder="Your password" onkeydown="if(event.key==='Enter') login()">
+    </div>
+
+    <button class="btn btn-primary" id="login-btn" onclick="login()">Log In →</button>
+
+    <div class="signup-link">Don't have an account? <a href="signup.html">Sign up free</a></div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:10000';
+
+async function login() {
+  const email = document.getElementById('f-email').value.trim();
+  const password = document.getElementById('f-password').value;
+  const errorMsg = document.getElementById('error-msg');
+
+  if (!email || !password) {
+    errorMsg.style.display = 'block';
+    errorMsg.textContent = 'Please fill in all fields';
+    return;
+  }
+
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true;
+  btn.textContent = 'Logging in...';
+  errorMsg.style.display = 'none';
+
+  try {
+    const res = await fetch(`${API}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      localStorage.setItem('vendor', JSON.stringify(data.vendor));
+      window.location.href = 'index.html';
+    } else {
+      errorMsg.style.display = 'block';
+      errorMsg.textContent = data.error || 'Invalid email or password';
+      btn.disabled = false;
+      btn.textContent = 'Log In →';
+    }
+  } catch(e) {
+    errorMsg.style.display = 'block';
+    errorMsg.textContent = 'Cannot reach server. Please try again.';
+    btn.disabled = false;
+    btn.textContent = 'Log In →';
+  }
+}
+</script>
+</body>
+</html>

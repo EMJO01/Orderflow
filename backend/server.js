@@ -103,6 +103,26 @@ app.post('/login', async (req, res) => {
   res.json({ success: true, vendor: { id: vendor.id, name: vendor.name, business_name: vendor.business_name, email: vendor.email } });
 });
 
+// Admin — get all vendors
+app.get('/admin/vendors', async (req, res) => {
+  const { data, error } = await supabase
+    .from('vendors')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// Admin — approve or deactivate vendor
+app.put('/admin/vendors/:id', async (req, res) => {
+  const { error } = await supabase
+    .from('vendors')
+    .update({ active: req.body.active })
+    .eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
 // WhatsApp webhook
 app.use('/webhook', require('./webhook'));
 

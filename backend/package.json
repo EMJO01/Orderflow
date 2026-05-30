@@ -12,6 +12,7 @@
   "type": "commonjs",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.97.1",
+    "@hapi/boom": "^10.0.1",
     "@supabase/supabase-js": "^2.106.0",
     "@whiskeysockets/baileys": "^7.0.0-rc13",
     "axios": "^1.16.1",

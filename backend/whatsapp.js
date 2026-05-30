@@ -10,7 +10,11 @@ async function connectToWhatsApp() {
     path.join(__dirname, 'auth_info')
   );
 
-  sock = makeWASocket({ auth: state, printQRInTerminal: true });
+  sock = makeWASocket({ 
+    auth: state, 
+    printQRInTerminal: true,
+    syncFullHistory: false
+  });
 
   sock.ev.on('creds.update', saveCreds);
 
@@ -29,6 +33,39 @@ async function connectToWhatsApp() {
         new Boom(lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
       console.log('Connection closed. Reconnecting:', shouldReconnect);
       if (shouldReconnect) connectToWhatsApp();
+    }
+  });
+
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+
+    const msg = messages[0];
+    if (!msg.message || msg.key.fromMe) return;
+
+    const from = msg.key.remoteJid;
+    if (!from || from === 'status@broadcast') return;
+
+    const text = msg.message?.conversation ||
+                 msg.message?.extendedTextMessage?.text || '';
+
+    if (!text) return;
+
+    console.log(`Message from ${from}: ${text}`);
+
+    try {
+      const supabase = require('./db');
+      const { generateReply } = require('./ai');
+
+      const { data: products } = await supabase
+        .from('products')
+        .select('*')
+        .eq('active', true);
+
+      const reply = await generateReply(text, products || []);
+      await sock.sendMessage(from, { text: reply });
+      console.log(`Replied: ${reply}`);
+    } catch (err) {
+      console.error('Reply error:', err.message);
     }
   });
 }

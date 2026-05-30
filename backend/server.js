@@ -1,3 +1,4 @@
+const { connectToWhatsApp } = require('./whatsapp');
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
@@ -123,10 +124,26 @@ app.put('/admin/vendors/:id', async (req, res) => {
   res.json({ success: true });
 });
 
+// QR code viewer
+app.get('/qr', (req, res) => {
+  if (global.latestQR) {
+    res.send(`
+      <html><body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#000">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(global.latestQR)}" />
+      </body></html>
+    `);
+  } else {
+    res.send('QR not ready yet — wait 10 seconds and refresh');
+  }
+});
+
 // WhatsApp webhook
 app.use('/webhook', require('./webhook'));
 
 app.get('/', (req, res) => res.json({ message: 'Rady server running!' }));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  connectToWhatsApp();
+});

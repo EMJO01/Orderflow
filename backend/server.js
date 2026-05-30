@@ -1,149 +1,72 @@
-const { connectToWhatsApp } = require('./whatsapp');
-const express = require('express');
-const cors = require('cors');
-require('dotenv').config();
-const supabase = require('./db');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const path = require('path');
 
-const app = express();
-app.use(cors({ origin: '*' }));
-app.use(express.json());
+let sock = null;
+let isReady = false;
 
-app.get('/products', async (req, res) => {
-  const { data, error } = await supabase
-    .from('products')
-    .select('*')
-    .order('id', { ascending: true });
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
-});
+async function connectToWhatsApp() {
+  const { state, saveCreds } = await useMultiFileAuthState(
+    path.join(__dirname, 'auth_info')
+  );
 
-app.post('/products', async (req, res) => {
-  const product = {
-    name: req.body.name,
-    price: req.body.price,
-    category: req.body.category,
-    description: req.body.desc || req.body.description || '',
-    emoji: req.body.emoji,
-    active: req.body.active,
-    sizes: req.body.sizes || '',
-    colors: req.body.colors || ''
-  };
-  const { data, error } = await supabase
-    .from('products')
-    .insert([product])
-    .select();
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data[0]);
-});
+  sock = makeWASocket({ auth: state, printQRInTerminal: true });
 
-app.put('/products/:id', async (req, res) => {
-  const product = {
-    name: req.body.name,
-    price: req.body.price,
-    category: req.body.category,
-    description: req.body.desc || req.body.description || '',
-    emoji: req.body.emoji,
-    active: req.body.active,
-    sizes: req.body.sizes || '',
-    colors: req.body.colors || ''
-  };
-  const { error } = await supabase
-    .from('products')
-    .update(product)
-    .eq('id', req.params.id);
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
-});
+  sock.ev.on('creds.update', saveCreds);
 
-app.delete('/products/:id', async (req, res) => {
-  const { error } = await supabase
-    .from('products')
-    .delete()
-    .eq('id', req.params.id);
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
-});
+  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+    if (qr) {
+      console.log('QR CODE READY — scan from WhatsApp');
+      global.latestQR = qr;
+    }
+    if (connection === 'open') {
+      console.log('✅ WhatsApp connected!');
+      isReady = true;
+    }
+    if (connection === 'close') {
+      isReady = false;
+      const shouldReconnect =
+        new Boom(lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+      console.log('Connection closed. Reconnecting:', shouldReconnect);
+      if (shouldReconnect) connectToWhatsApp();
+    }
+  });
 
-// Signup route
-app.post('/signup', async (req, res) => {
-  const { name, business_name, email, whatsapp_number, business_type, about, password } = req.body;
+  // ✅ THIS is where incoming messages are handled
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    const msg = messages[0];
+    if (!msg.message || msg.key.fromMe) return;
 
-  const { data: existing } = await supabase
-    .from('vendors')
-    .select('id')
-    .eq('email', email)
-    .single();
+    const from = msg.key.remoteJid;
+    const text = msg.message?.conversation ||
+                 msg.message?.extendedTextMessage?.text || '';
 
-  if (existing) return res.json({ success: false, error: 'Email already registered' });
+    if (!text) return;
 
-  const { data, error } = await supabase
-    .from('vendors')
-    .insert([{ name, business_name, email, whatsapp_number, business_type, about, password, active: false }])
-    .select();
+    console.log(`Message from ${from}: ${text}`);
 
-  if (error) return res.json({ success: false, error: error.message });
+    try {
+      const supabase = require('./db');
+      const { generateReply } = require('./ai');
 
-  console.log(`New signup: ${business_name} — ${email} — ${whatsapp_number}`);
-  res.json({ success: true });
-});
+      const { data: products } = await supabase
+        .from('products')
+        .select('*')
+        .eq('active', true);
 
-// Login route
-app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
+      const reply = await generateReply(text, products || []);
+      await sock.sendMessage(from, { text: reply });
+      console.log(`Replied: ${reply}`);
+    } catch (err) {
+      console.error('Reply error:', err.message);
+    }
+  });
+}
 
-  const { data: vendor, error } = await supabase
-    .from('vendors')
-    .select('*')
-    .eq('email', email)
-    .eq('password', password)
-    .single();
+async function sendWhatsApp(to, message) {
+  if (!sock || !isReady) throw new Error('WhatsApp not connected yet');
+  const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
+  await sock.sendMessage(jid, { text: message });
+}
 
-  if (error || !vendor) return res.json({ success: false, error: 'Invalid email or password' });
-  if (!vendor.active) return res.json({ success: false, error: 'Your account is pending approval. We will notify you within 48 hours.' });
-
-  res.json({ success: true, vendor: { id: vendor.id, name: vendor.name, business_name: vendor.business_name, email: vendor.email } });
-});
-
-// Admin — get all vendors
-app.get('/admin/vendors', async (req, res) => {
-  const { data, error } = await supabase
-    .from('vendors')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
-});
-
-// Admin — approve or deactivate vendor
-app.put('/admin/vendors/:id', async (req, res) => {
-  const { error } = await supabase
-    .from('vendors')
-    .update({ active: req.body.active })
-    .eq('id', req.params.id);
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
-});
-
-// QR code viewer
-app.get('/qr', (req, res) => {
-  if (global.latestQR) {
-    res.send(`
-      <html><body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#000">
-      <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(global.latestQR)}" />
-      </body></html>
-    `);
-  } else {
-    res.send('QR not ready yet — wait 10 seconds and refresh');
-  }
-});
-
-// WhatsApp webhook
-app.use('/webhook', require('./webhook'));
-
-app.get('/', (req, res) => res.json({ message: 'Rady server running!' }));
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  connectToWhatsApp();
-});
+module.exports = { connectToWhatsApp, sendWhatsApp };

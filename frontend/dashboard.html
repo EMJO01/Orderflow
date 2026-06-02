@@ -27,9 +27,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .nav-item.active{background:var(--accent-dim);color:var(--accent);}
 .sidebar-footer{padding:16px 20px;border-top:1px solid var(--border);}
 .vendor-card{display:flex;align-items:center;gap:10px;}
-.vendor-avatar{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#111,#444);display:flex;align-items:center;justify-content:center;font-size:16px;}
+.vendor-avatar{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#1aad52,#128C7E);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;}
 .vendor-name{font-weight:600;font-size:13px;}
 .vendor-plan{font-size:11px;color:var(--accent);background:var(--accent-dim);padding:1px 6px;border-radius:4px;margin-top:2px;display:inline-block;}
+.logout-btn{margin-top:10px;width:100%;padding:7px;background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;}
+.logout-btn:hover{border-color:var(--red);color:var(--red);}
 .main{flex:1;overflow-y:auto;}
 .topbar{padding:20px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface);position:sticky;top:0;z-index:50;}
 .page-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;}
@@ -50,14 +52,33 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;}
 .stat-value{font-family:'Syne',sans-serif;font-size:26px;font-weight:700;margin:6px 0 4px;}
 .stat-change{font-size:12px;color:var(--accent);}
-.wa-banner{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;}
+
+/* WhatsApp Banner */
+.wa-banner{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:24px;transition:border-color .2s;}
+.wa-banner.connected{border-left:3px solid var(--accent);}
+.wa-banner.disconnected{border-left:3px solid #FF6B35;}
+.wa-banner-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;}
 .wa-banner-left{display:flex;align-items:center;gap:14px;}
-.wa-icon{font-size:28px;}
-.wa-banner-title{font-weight:600;font-size:14px;}
-.wa-banner-sub{font-size:12px;color:var(--muted);margin-top:2px;}
-.wa-status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--accent);font-weight:500;}
+.wa-icon{font-size:32px;}
+.wa-banner-title{font-weight:600;font-size:14px;margin-bottom:3px;}
+.wa-banner-sub{font-size:12px;color:var(--muted);}
+.wa-status-connected{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--accent);font-weight:500;}
 .wa-dot{width:8px;height:8px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite;}
+.wa-status-disconnected{display:flex;align-items:center;gap:6px;font-size:12px;color:#FF6B35;font-weight:500;}
+.wa-dot-off{width:8px;height:8px;background:#FF6B35;border-radius:50%;}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.85)}}
+
+/* QR Modal */
+.qr-section{margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:none;}
+.qr-section.open{display:block;}
+.qr-frame{display:flex;align-items:flex-start;gap:24px;}
+.qr-box{background:#fff;border-radius:12px;padding:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.qr-box img{width:180px;height:180px;display:block;}
+.qr-steps{flex:1;}
+.qr-step{display:flex;gap:10px;margin-bottom:12px;font-size:13px;line-height:1.5;}
+.qr-num{width:22px;height:22px;border-radius:50%;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px;}
+.qr-loading{text-align:center;padding:40px;color:var(--muted);font-size:13px;}
+
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
 .section-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;}
 .search-input{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 14px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;width:200px;outline:none;transition:border-color .15s;}
@@ -118,50 +139,68 @@ textarea{resize:vertical;min-height:70px;}
 .toast.show{transform:translateX(0);}
 .loading{text-align:center;padding:40px;color:var(--muted);font-size:14px;}
 .cell-small{font-size:12px;color:var(--muted);}
+
+/* Login Gate */
+#login-gate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;}
+.login-box{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:36px;width:380px;}
+.login-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:24px;color:var(--accent);margin-bottom:4px;}
+.login-sub{font-size:13px;color:var(--muted);margin-bottom:28px;}
+.login-error{background:var(--red-dim);border:1px solid var(--red);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:16px;display:none;}
 </style>
 </head>
 <body>
-<div class="shell">
+
+<!-- Login Gate -->
+<div id="login-gate">
+  <div class="login-box">
+    <div class="login-logo">Rady</div>
+    <div class="login-sub">Sign in to your vendor dashboard</div>
+    <div class="login-error" id="login-error"></div>
+    <div class="form-row"><label>Email</label><input type="text" id="login-email" placeholder="you@example.com"></div>
+    <div class="form-row"><label>Password</label><input type="text" id="login-pass" placeholder="••••••••"></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;" onclick="doLogin()">Sign In</button>
+  </div>
+</div>
+
+<div class="shell" id="app" style="display:none;">
   <aside class="sidebar">
     <div class="logo">
       <div class="logo-mark">Rady</div>
       <div class="logo-sub">Vendor Dashboard</div>
     </div>
     <nav class="nav">
-      <div class="nav-item active">👕 Products</div>
-      <div class="nav-item">🛒 Orders</div>
-      <div class="nav-item">📊 Analytics</div>
-      <div class="nav-item">💬 WhatsApp</div>
-      <div class="nav-item">🏪 Store Profile</div>
+      <div class="nav-item active" onclick="showPage('products',this)">👕 Products</div>
+      <div class="nav-item" onclick="showPage('whatsapp',this)">💬 WhatsApp</div>
+      <div class="nav-item" onclick="showPage('orders',this)">🛒 Orders</div>
+      <div class="nav-item" onclick="showPage('analytics',this)">📊 Analytics</div>
     </nav>
     <div class="sidebar-footer">
       <div class="vendor-card">
-        <div class="vendor-avatar">👗</div>
+        <div class="vendor-avatar" id="sidebar-avatar">R</div>
         <div>
-          <div class="vendor-name">StyleStore</div>
-          <div class="vendor-plan">Pro Plan</div>
+          <div class="vendor-name" id="sidebar-name">Loading...</div>
+          <div class="vendor-plan">Active</div>
         </div>
       </div>
+      <button class="logout-btn" onclick="logout()">Sign out</button>
     </div>
   </aside>
 
   <div class="main">
     <div class="topbar">
-      <div class="page-title">Products</div>
+      <div class="page-title" id="page-title">Products</div>
       <div class="topbar-actions">
-        <button class="btn btn-primary" onclick="openModal()">+ Add Product</button>
+        <button class="btn btn-primary" id="add-btn" onclick="openModal()">+ Add Product</button>
       </div>
     </div>
-    <div class="content">
+
+    <!-- PRODUCTS PAGE -->
+    <div class="content" id="page-products">
       <div class="stats">
         <div class="stat-card green"><div class="stat-label">Total Products</div><div class="stat-value" id="stat-total">0</div><div class="stat-change">Your catalog</div></div>
         <div class="stat-card orange"><div class="stat-label">Active</div><div class="stat-value" id="stat-active">0</div><div class="stat-change">Visible to customers</div></div>
         <div class="stat-card blue"><div class="stat-label">Orders Today</div><div class="stat-value">0</div><div class="stat-change">Via WhatsApp</div></div>
         <div class="stat-card purple"><div class="stat-label">Revenue Today</div><div class="stat-value">₦0</div><div class="stat-change">Keep pushing!</div></div>
-      </div>
-      <div class="wa-banner">
-        <div class="wa-banner-left"><div class="wa-icon">💬</div><div><div class="wa-banner-title">WhatsApp Bot</div><div class="wa-banner-sub">Connect your number to activate the AI bot</div></div></div>
-        <div class="wa-status"><div class="wa-dot"></div> Ready</div>
       </div>
       <div class="section-header">
         <div class="section-title">Your Catalog</div>
@@ -173,16 +212,56 @@ textarea{resize:vertical;min-height:70px;}
         <button class="pill" onclick="filterCat('Caps',this)">🧢 Caps</button>
         <button class="pill" onclick="filterCat('T-Shirts',this)">👕 T-Shirts</button>
         <button class="pill" onclick="filterCat('Accessories',this)">👜 Accessories</button>
+        <button class="pill" onclick="filterCat('Food',this)">🍛 Food</button>
+        <button class="pill" onclick="filterCat('Drinks',this)">🥤 Drinks</button>
+        <button class="pill" onclick="filterCat('Electronics',this)">📱 Electronics</button>
       </div>
       <div class="products-table">
         <div class="table-head"><div>Product</div><div>Price</div><div>Category</div><div>Sizes</div><div>Status</div><div>Actions</div></div>
         <div id="products-list"><div class="loading">Loading catalog...</div></div>
       </div>
     </div>
+
+    <!-- WHATSAPP PAGE -->
+    <div class="content" id="page-whatsapp" style="display:none;">
+      <div class="wa-banner" id="wa-banner">
+        <div class="wa-banner-inner">
+          <div class="wa-banner-left">
+            <div class="wa-icon">💬</div>
+            <div>
+              <div class="wa-banner-title" id="wa-title">WhatsApp Bot</div>
+              <div class="wa-banner-sub" id="wa-sub">Check your connection status</div>
+            </div>
+          </div>
+          <div id="wa-status-area"></div>
+        </div>
+        <div class="qr-section" id="qr-section">
+          <div id="qr-content" class="qr-loading">Loading QR code...</div>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;">
+        <div class="section-title" style="margin-bottom:16px;">How it works</div>
+        <div class="qr-step"><div class="qr-num">1</div><div>Click <strong>Connect WhatsApp</strong> above and scan the QR with your WhatsApp number</div></div>
+        <div class="qr-step"><div class="qr-num">2</div><div>Your bot goes live instantly — customers text your number and the AI replies automatically</div></div>
+        <div class="qr-step"><div class="qr-num">3</div><div>The bot only shows <strong>your products</strong> — completely separate from other vendors</div></div>
+        <div class="qr-step"><div class="qr-num">4</div><div>Keep your phone connected to the internet so the bot stays online</div></div>
+      </div>
+    </div>
+
+    <!-- ORDERS PAGE -->
+    <div class="content" id="page-orders" style="display:none;">
+      <div class="empty-state"><div class="empty-icon">🛒</div><div class="empty-title">No orders yet</div><div>Orders will appear here once customers start buying</div></div>
+    </div>
+
+    <!-- ANALYTICS PAGE -->
+    <div class="content" id="page-analytics" style="display:none;">
+      <div class="empty-state"><div class="empty-icon">📊</div><div class="empty-title">Analytics coming soon</div><div>Track chats, orders, and revenue here</div></div>
+    </div>
   </div>
 </div>
 
-<!-- Modal -->
+<!-- Product Modal -->
 <div class="modal-overlay" id="modal">
   <div class="modal">
     <div class="modal-header">
@@ -195,16 +274,17 @@ textarea{resize:vertical;min-height:70px;}
         <div><label>Price (₦)</label><input type="number" id="f-price" placeholder="18500"></div>
         <div><label>Category</label>
           <select id="f-category">
-            <option>Hoodies</option><option>Caps</option>
-            <option>T-Shirts</option><option>Accessories</option><option>Joggers</option><option>Jackets</option>
+            <option>Hoodies</option><option>Caps</option><option>T-Shirts</option>
+            <option>Accessories</option><option>Joggers</option><option>Jackets</option>
+            <option>Food</option><option>Drinks</option><option>Electronics</option><option>Other</option>
           </select>
         </div>
       </div>
       <div class="form-row-2">
-        <div><label>Available Sizes</label><input type="text" id="f-sizes" placeholder="S, M, L, XL, XXL"></div>
-        <div><label>Available Colors</label><input type="text" id="f-colors" placeholder="Black, White, Grey"></div>
+        <div><label>Available Sizes</label><input type="text" id="f-sizes" placeholder="S, M, L, XL (optional)"></div>
+        <div><label>Available Colors</label><input type="text" id="f-colors" placeholder="Black, White (optional)"></div>
       </div>
-      <div class="form-row"><label>Description</label><textarea id="f-desc" placeholder="e.g. Oversized fit, 100% cotton, unisex"></textarea></div>
+      <div class="form-row"><label>Description</label><textarea id="f-desc" placeholder="Short description for customers"></textarea></div>
       <div class="form-row">
         <label>Pick an Emoji</label>
         <div class="emoji-picker" id="emoji-picker"></div>
@@ -225,15 +305,165 @@ textarea{resize:vertical;min-height:70px;}
 
 <script>
 const API = 'https://rady-bot.onrender.com';
-let products = [], selectedEmoji = '👕', editingId = null, currentCat = 'all', searchTerm = '';
+let products = [], selectedEmoji = '👕', editingId = null;
+let currentCat = 'all', searchTerm = '';
+let vendor = null;
+
+// ── AUTH ──────────────────────────────────────────────────────────────────────
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-pass').value.trim();
+  if (!email || !pass) return showLoginError('Enter your email and password');
+  try {
+    const res = await fetch(`${API}/login`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ email, password: pass })
+    });
+    const data = await res.json();
+    if (!data.success) return showLoginError(data.error);
+    vendor = data.vendor;
+    localStorage.setItem('rady_vendor', JSON.stringify(vendor));
+    initDashboard();
+  } catch(e) { showLoginError('Cannot reach server. Try again.'); }
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg; el.style.display = 'block';
+}
+
+function logout() {
+  localStorage.removeItem('rady_vendor');
+  location.reload();
+}
+
+function initDashboard() {
+  document.getElementById('login-gate').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  const initials = vendor.business_name?.charAt(0).toUpperCase() || 'V';
+  document.getElementById('sidebar-avatar').textContent = initials;
+  document.getElementById('sidebar-name').textContent = vendor.business_name;
+  loadProducts();
+  checkWAStatus();
+}
+
+// Check on load
+const saved = localStorage.getItem('rady_vendor');
+if (saved) { vendor = JSON.parse(saved); initDashboard(); }
+
+// ── NAVIGATION ────────────────────────────────────────────────────────────────
+
+function showPage(page, el) {
+  ['products','whatsapp','orders','analytics'].forEach(p => {
+    document.getElementById(`page-${p}`).style.display = 'none';
+  });
+  document.getElementById(`page-${page}`).style.display = 'block';
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  const titles = {products:'Products',whatsapp:'WhatsApp Bot',orders:'Orders',analytics:'Analytics'};
+  document.getElementById('page-title').textContent = titles[page];
+  document.getElementById('add-btn').style.display = page === 'products' ? 'flex' : 'none';
+  if (page === 'whatsapp') checkWAStatus();
+}
+
+// ── WHATSAPP ──────────────────────────────────────────────────────────────────
+
+let waConnected = false;
+let qrPolling = null;
+
+async function checkWAStatus() {
+  if (!vendor) return;
+  try {
+    const res = await fetch(`${API}/vendors/${vendor.id}/status`);
+    const data = await res.json();
+    waConnected = data.whatsapp_connected;
+    renderWABanner();
+  } catch(e) { renderWABanner(); }
+}
+
+function renderWABanner() {
+  const banner = document.getElementById('wa-banner');
+  const title = document.getElementById('wa-title');
+  const sub = document.getElementById('wa-sub');
+  const statusArea = document.getElementById('wa-status-area');
+
+  if (waConnected) {
+    banner.className = 'wa-banner connected';
+    title.textContent = 'WhatsApp Bot — Connected';
+    sub.textContent = `Your bot is live on ${vendor.business_name}`;
+    statusArea.innerHTML = `<div class="wa-status-connected"><div class="wa-dot"></div> Live & Active</div>`;
+    document.getElementById('qr-section').classList.remove('open');
+    if (qrPolling) { clearInterval(qrPolling); qrPolling = null; }
+  } else {
+    banner.className = 'wa-banner disconnected';
+    title.textContent = 'WhatsApp Bot — Not Connected';
+    sub.textContent = 'Connect your WhatsApp number to go live';
+    statusArea.innerHTML = `<button class="btn btn-primary" onclick="startQR()">📱 Connect WhatsApp</button>`;
+  }
+}
+
+async function startQR() {
+  const qrSection = document.getElementById('qr-section');
+  const qrContent = document.getElementById('qr-content');
+  qrSection.classList.add('open');
+  qrContent.innerHTML = '<div class="qr-loading">⏳ Generating QR code...<br><small style="color:var(--muted);margin-top:8px;display:block">This takes about 5 seconds</small></div>';
+
+  try {
+    await fetch(`${API}/vendors/${vendor.id}/qr`);
+  } catch(e) {}
+
+  let attempts = 0;
+  qrPolling = setInterval(async () => {
+    attempts++;
+    try {
+      const res = await fetch(`${API}/vendors/${vendor.id}/status`);
+      const data = await res.json();
+      if (data.whatsapp_connected) {
+        clearInterval(qrPolling);
+        waConnected = true;
+        renderWABanner();
+        showToast('✅ WhatsApp connected!');
+        return;
+      }
+    } catch(e) {}
+
+    if (attempts % 5 === 0) {
+      try {
+        const imgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`${API}/vendors/${vendor.id}/qr`)}`;
+        qrContent.innerHTML = `
+          <div class="qr-frame">
+            <div class="qr-box">
+              <iframe src="${API}/vendors/${vendor.id}/qr" style="width:200px;height:200px;border:none;border-radius:8px;" title="QR Code"></iframe>
+            </div>
+            <div class="qr-steps">
+              <div class="qr-step"><div class="qr-num">1</div><div>Open WhatsApp on your phone</div></div>
+              <div class="qr-step"><div class="qr-num">2</div><div>Tap <strong>⋮ → Linked Devices → Link a Device</strong></div></div>
+              <div class="qr-step"><div class="qr-num">3</div><div>Point your camera at the QR code</div></div>
+              <div class="qr-step"><div class="qr-num">4</div><div>Your bot goes live instantly! 🎉</div></div>
+              <p style="font-size:11px;color:var(--muted);margin-top:12px;">QR refreshes automatically. Keep this page open.</p>
+            </div>
+          </div>`;
+      } catch(e) {}
+    }
+
+    if (attempts > 120) {
+      clearInterval(qrPolling);
+      qrContent.innerHTML = '<div class="qr-loading">⚠️ Timed out. <button class="btn btn-ghost" onclick="startQR()" style="margin-top:10px">Try again</button></div>';
+    }
+  }, 2000);
+}
+
+// ── PRODUCTS ──────────────────────────────────────────────────────────────────
 
 async function loadProducts() {
+  if (!vendor) return;
   try {
-    const res = await fetch(`${API}/products`);
+    const res = await fetch(`${API}/products?vendor_id=${vendor.id}`);
     products = await res.json();
     renderProducts();
   } catch(e) {
-    document.getElementById('products-list').innerHTML = '<div class="loading">⚠️ Cannot reach server. Make sure node server.js is running.</div>';
+    document.getElementById('products-list').innerHTML = '<div class="loading">⚠️ Cannot reach server.</div>';
   }
 }
 
@@ -245,18 +475,18 @@ function renderProducts() {
     return matchCat && matchSearch;
   });
   if (!filtered.length) {
-    list.innerHTML = '<div class="empty-state"><div class="empty-icon">👗</div><div class="empty-title">No products yet</div><div>Click + Add Product to get started</div></div>';
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">No products yet</div><div>Click + Add Product to get started</div></div>';
   } else {
     list.innerHTML = filtered.map(p => `
       <div class="product-row">
         <div class="product-info">
-          <div class="product-emoji">${p.emoji}</div>
+          <div class="product-emoji">${p.emoji || '📦'}</div>
           <div><div class="product-name">${p.name}</div><div class="product-category">${p.description || ''}</div></div>
         </div>
         <div class="price">₦${Number(p.price).toLocaleString()}</div>
         <div class="cell-small">${p.category}</div>
         <div class="cell-small">${p.sizes || '—'}</div>
-        <div><span class="badge ${p.active ? 'badge-active' : 'badge-inactive'}">${p.active ? 'Active' : 'Hidden'}</span></div>
+        <div><span class="badge ${p.active ? 'badge-active':'badge-inactive'}">${p.active ? 'Active':'Hidden'}</span></div>
         <div class="actions">
           <button class="icon-btn" onclick="editProduct(${p.id})">✏️</button>
           <button class="icon-btn delete" onclick="deleteProduct(${p.id})">🗑</button>
@@ -287,7 +517,8 @@ async function saveProduct() {
     emoji: selectedEmoji,
     active: document.getElementById('toggle-active').classList.contains('on'),
     sizes: document.getElementById('f-sizes').value.trim(),
-    colors: document.getElementById('f-colors').value.trim()
+    colors: document.getElementById('f-colors').value.trim(),
+    vendor_id: vendor.id
   };
   try {
     if (editingId) {
@@ -298,7 +529,7 @@ async function saveProduct() {
       showToast('✓ Product added!');
     }
     closeModal(); loadProducts();
-  } catch(e) { showToast('⚠️ Could not save. Is the server running?'); }
+  } catch(e) { showToast('⚠️ Could not save.'); }
 }
 
 async function deleteProduct(id) {
@@ -318,7 +549,7 @@ function editProduct(id) {
   document.getElementById('f-desc').value = p.description || '';
   document.getElementById('f-sizes').value = p.sizes || '';
   document.getElementById('f-colors').value = p.colors || '';
-  selectedEmoji = p.emoji;
+  selectedEmoji = p.emoji || '📦';
   p.active ? document.getElementById('toggle-active').classList.add('on') : document.getElementById('toggle-active').classList.remove('on');
   renderEmojiPicker();
   document.getElementById('modal').classList.add('open');
@@ -328,7 +559,7 @@ function openModal() {
   editingId = null;
   document.getElementById('modal-title').textContent = 'Add New Product';
   ['f-name','f-price','f-desc','f-sizes','f-colors'].forEach(id => document.getElementById(id).value = '');
-  selectedEmoji = '👕';
+  selectedEmoji = '📦';
   document.getElementById('toggle-active').classList.add('on');
   renderEmojiPicker();
   document.getElementById('modal').classList.add('open');
@@ -337,7 +568,7 @@ function openModal() {
 function closeModal() { document.getElementById('modal').classList.remove('open'); editingId = null; }
 
 function renderEmojiPicker() {
-  const emojis = ['👕','👗','🧥','🧢','🎩','👒','👜','👟','🧤','🧣','💍','⌚','🕶️','🩺','🩱','🩲','👚','👔','🥻','🩳'];
+  const emojis = ['📦','👕','👗','🧥','🧢','🎩','👒','👜','👟','🧤','🧣','💍','⌚','🕶️','🍕','🍔','🍛','🥘','🧃','📱','💻','🎮','🛍️','🌸','💄','🧴','🏠','🚗'];
   document.getElementById('emoji-picker').innerHTML = emojis.map(e =>
     `<div class="emoji-opt${e===selectedEmoji?' selected':''}" onclick="selectEmoji('${e}',this)">${e}</div>`
   ).join('');
@@ -351,13 +582,13 @@ function selectEmoji(e, el) {
 
 function showToast(msg) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
+  t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
 document.getElementById('modal').addEventListener('click', e => { if(e.target===document.getElementById('modal')) closeModal(); });
-loadProducts();
+document.getElementById('login-email').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 </script>
 </body>
 </html>

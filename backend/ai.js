@@ -3,10 +3,10 @@ require('dotenv').config();
 
 const client = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
 
-async function generateReply(customerMessage, products) {
+async function generateReply(customerMessage, products, vendorName = 'our store') {
   const catalog = products
     .filter(p => p.active)
-    .map(p => `${p.emoji} ${p.name} — ₦${p.price} | Sizes: ${p.sizes || 'One size'} | Colors: ${p.colors || 'See store'}`)
+    .map(p => `${p.emoji || ''} ${p.name} — ₦${p.price}${p.sizes ? ` | Sizes: ${p.sizes}` : ''}${p.colors ? ` | Colors: ${p.colors}` : ''}${p.description ? ` | ${p.description}` : ''}`)
     .join('\n');
 
   const response = await client.messages.create({
@@ -14,17 +14,17 @@ async function generateReply(customerMessage, products) {
     max_tokens: 500,
     messages: [{
       role: 'user',
-      content: `You are a friendly WhatsApp sales assistant for a fashion store selling hoodies, caps and clothing.
+      content: `You are a friendly WhatsApp sales assistant for ${vendorName}.
 Keep replies short, warm and natural like a real person texting.
 Always use ₦ for prices. Never use markdown, bullet points or asterisks — plain text only.
 
 Our catalog:
-${catalog}
+${catalog || 'No products available yet.'}
 
 Customer message: "${customerMessage}"
 
-If they greet, welcome them and show the catalog naturally.
-If they want to order, ask for their size, color and delivery address.
+If they greet, welcome them warmly and show the catalog naturally.
+If they want to order, ask for the details you need (size, color, address etc).
 If they confirm an order, give them a clean summary and say payment is on delivery.`
     }]
   });

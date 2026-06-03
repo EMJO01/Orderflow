@@ -64,10 +64,9 @@ app.post('/signup', async (req, res) => {
   const { name, business_name, email, whatsapp_number, business_type, about, password } = req.body;
   const { data: existing } = await supabase.from('vendors').select('id').eq('email', email).single();
   if (existing) return res.json({ success: false, error: 'Email already registered' });
-  const slug = business_name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
   const { data, error } = await supabase
     .from('vendors')
-    .insert([{ name, business_name, email, whatsapp_number, business_type, about, password, active: false, business_name_slug: slug }])
+    .insert([{ name, business_name, email, whatsapp_number, business_type, about, password, active: false }])
     .select();
   if (error) return res.json({ success: false, error: error.message });
   console.log(`New signup: ${business_name} — ${email}`);

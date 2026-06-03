@@ -206,16 +206,9 @@ textarea{resize:vertical;min-height:70px;}
         <div class="section-title">Your Catalog</div>
         <input class="search-input" type="text" placeholder="Search products..." oninput="filterProducts(this.value)">
       </div>
-      <div class="filter-pills">
-        <button class="pill active" onclick="filterCat('all',this)">All</button>
-        <button class="pill" onclick="filterCat('Hoodies',this)">🧥 Hoodies</button>
-        <button class="pill" onclick="filterCat('Caps',this)">🧢 Caps</button>
-        <button class="pill" onclick="filterCat('T-Shirts',this)">👕 T-Shirts</button>
-        <button class="pill" onclick="filterCat('Accessories',this)">👜 Accessories</button>
-        <button class="pill" onclick="filterCat('Food',this)">🍛 Food</button>
-        <button class="pill" onclick="filterCat('Drinks',this)">🥤 Drinks</button>
-        <button class="pill" onclick="filterCat('Electronics',this)">📱 Electronics</button>
-      </div>
+
+      <div class="filter-pills" id="filter-pills"></div>
+
       <div class="products-table">
         <div class="table-head"><div>Product</div><div>Price</div><div>Category</div><div>Sizes</div><div>Status</div><div>Actions</div></div>
         <div id="products-list"><div class="loading">Loading catalog...</div></div>
@@ -469,11 +462,27 @@ async function loadProducts() {
 
 function renderProducts() {
   const list = document.getElementById('products-list');
+
+  // Build dynamic category pills from actual products
+  const categoryEmojis = {
+    'Hoodies':'🧥','Caps':'🧢','T-Shirts':'👕','Accessories':'👜',
+    'Joggers':'👖','Jackets':'🧣','Food':'🍛','Drinks':'🥤',
+    'Electronics':'📱','Other':'📦'
+  };
+  const existingCats = [...new Set(products.map(p => p.category).filter(Boolean))];
+  const pillsEl = document.getElementById('filter-pills');
+  pillsEl.innerHTML = `<button class="pill ${currentCat==='all'?'active':''}" onclick="filterCat('all',this)">All</button>` +
+    existingCats.map(cat =>
+      `<button class="pill ${currentCat===cat?'active':''}" onclick="filterCat('${cat}',this)">${categoryEmojis[cat]||'📦'} ${cat}</button>`
+    ).join('');
+
+  // Filter and render rows
   let filtered = products.filter(p => {
     const matchCat = currentCat === 'all' || p.category === currentCat;
     const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
     return matchCat && matchSearch;
   });
+
   if (!filtered.length) {
     list.innerHTML = '<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">No products yet</div><div>Click + Add Product to get started</div></div>';
   } else {
@@ -493,6 +502,7 @@ function renderProducts() {
         </div>
       </div>`).join('');
   }
+
   document.getElementById('stat-total').textContent = products.length;
   document.getElementById('stat-active').textContent = products.filter(p => p.active).length;
 }

@@ -425,10 +425,12 @@ async function startQR() {
       try {
         const imgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`${API}/vendors/${vendor.id}/qr`)}`;
         qrContent.innerHTML = `
-          <div class="qr-frame">
-            <div class="qr-box">
-              <iframe src="${API}/vendors/${vendor.id}/qr" style="width:200px;height:200px;border:none;border-radius:8px;" title="QR Code"></iframe>
-            </div>
+        <div class="qr-frame">
+          <div class="qr-box">
+            <img src="https://rady-bot.onrender.com/vendors/${vendor.id}/qr-image" 
+                style="width:220px;height:220px;display:block;" 
+                onerror="this.src=''" alt="QR Code"/>
+          </div>
             <div class="qr-steps">
               <div class="qr-step"><div class="qr-num">1</div><div>Open WhatsApp on your phone</div></div>
               <div class="qr-step"><div class="qr-num">2</div><div>Tap <strong>⋮ → Linked Devices → Link a Device</strong></div></div>

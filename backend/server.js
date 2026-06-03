@@ -165,3 +165,26 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   connectVendor('owner', 'Rady Owner');
 });
+
+app.get('/vendors/:id/qr-image', async (req, res) => {
+  const vendorId = req.params.id;
+  const { data: vendor, error } = await supabase.from('vendors').select('*').eq('id', vendorId).single();
+  if (error || !vendor) return res.status(404).send('Not found');
+  if (!vendor.active) return res.status(403).send('Not approved');
+
+  await connectVendor(vendorId, vendor.business_name);
+
+  const checkQR = (attempts = 0) => {
+    const qr = getQR(vendorId);
+    if (qr) {
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`;
+      return res.redirect(qrImageUrl);
+    }
+    if (attempts < 15) {
+      setTimeout(() => checkQR(attempts + 1), 1000);
+    } else {
+      res.status(504).send('QR not ready');
+    }
+  };
+  setTimeout(() => checkQR(), 1000);
+});

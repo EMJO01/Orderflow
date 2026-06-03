@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OrderFlow — Get Started</title>
+<title>Nexua OrderFlow — Get Started</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -48,17 +48,17 @@ textarea{resize:vertical;min-height:80px;}
 .feature-title{font-size:12px;font-weight:600;color:var(--text);}
 .feature-sub{font-size:11px;color:var(--muted);margin-top:2px;}
 .plan-badge{display:inline-flex;align-items:center;gap:6px;background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;margin-bottom:20px;}
+.error-box{display:none;background:rgba(255,68,68,0.1);border:1px solid #FF4444;border-radius:8px;padding:12px 14px;font-size:13px;color:#FF4444;margin-bottom:12px;}
 </style>
 </head>
 <body>
 <div class="container">
   <div class="logo">
     <div class="logo-mark">OrderFlow</div>
-    <div class="logo-sub">WhatsApp AI ordering system</div>
+    <div class="logo-sub">by Nexua — WhatsApp AI ordering system</div>
   </div>
 
   <div class="card">
-    <!-- Signup form -->
     <div id="signup-form">
       <div class="plan-badge">🚀 Free 7-day trial</div>
       <div class="card-title">Get started free</div>
@@ -81,27 +81,43 @@ textarea{resize:vertical;min-height:80px;}
           <div class="feature-sub">Customers use same app</div>
         </div>
         <div class="feature">
-          <div class="feature-icon">🇳🇬</div>
-          <div class="feature-title">Built for Nigeria</div>
-          <div class="feature-sub">₦ pricing, local support</div>
+          <div class="feature-icon">🌍</div>
+          <div class="feature-title">Built for growth</div>
+          <div class="feature-sub">Works in any country</div>
         </div>
       </div>
 
+      <div class="error-box" id="error-box"></div>
+
       <div class="form-row">
         <label>Your Full Name</label>
-        <input type="text" id="f-name" placeholder="e.g. Amaka Johnson">
+        <input type="text" id="f-name" placeholder="e.g. Sarah Johnson">
       </div>
       <div class="form-row">
         <label>Business Name</label>
-        <input type="text" id="f-business" placeholder="e.g. Mama Tunde's Kitchen">
+        <input type="text" id="f-business" placeholder="e.g. The Fashion Store">
       </div>
       <div class="form-row">
         <label>Email Address</label>
         <input type="email" id="f-email" placeholder="you@example.com">
       </div>
       <div class="form-row">
-        <label>WhatsApp Number</label>
-        <input type="text" id="f-whatsapp" placeholder="+234 801 234 5678">
+        <label>WhatsApp Number (with country code)</label>
+        <input type="text" id="f-whatsapp" placeholder="+1 234 567 8900">
+      </div>
+      <div class="form-row">
+        <label>Country</label>
+        <select id="f-country">
+          <option value="">Select your country</option>
+          <option value="Nigeria">🇳🇬 Nigeria</option>
+          <option value="Germany">🇩🇪 Germany</option>
+          <option value="UK">🇬🇧 United Kingdom</option>
+          <option value="US">🇺🇸 United States</option>
+          <option value="Ghana">🇬🇭 Ghana</option>
+          <option value="Kenya">🇰🇪 Kenya</option>
+          <option value="South Africa">🇿🇦 South Africa</option>
+          <option value="Other">🌍 Other</option>
+        </select>
       </div>
       <div class="form-row">
         <label>Business Type</label>
@@ -133,17 +149,17 @@ textarea{resize:vertical;min-height:80px;}
     <!-- Success state -->
     <div class="success-state" id="success-state">
       <div class="success-icon">🎉</div>
-        <div class="success-title">Application received!</div>
-          <div class="success-sub">
-            We'll review your details and activate your account within <strong>48 hours</strong>.<br><br>
-            You'll receive a WhatsApp message on <span id="success-number"></span> once you're approved.<br><br>
-            Once activated, you can log in and set up your store.<br><br>
-            Questions? Message us on WhatsApp.
-          </div>
-          <a href="dashboard.html" style="display:inline-block;margin-top:24px;padding:11px 28px;background:var(--accent);color:#000;border-radius:var(--radius-sm);font-weight:600;font-size:14px;text-decoration:none;">Go to Login →</a>
-        </div>
+      <div class="success-title">Application received!</div>
+      <div class="success-sub">
+        We'll review your details and activate your account within <strong>48 hours</strong>.<br><br>
+        You'll receive a WhatsApp message on <span id="success-number"></span> once you're approved.<br><br>
+        Once activated, you can log in and set up your store.<br><br>
+        Questions? Message us on WhatsApp.
       </div>
+      <a href="dashboard.html" style="display:inline-block;margin-top:24px;padding:11px 28px;background:var(--accent);color:#000;border-radius:var(--radius-sm);font-weight:600;font-size:14px;text-decoration:none;">Go to Login →</a>
     </div>
+  </div>
+</div>
 
 <script>
 const API = 'https://rady-bot.onrender.com';
@@ -153,47 +169,52 @@ async function submitSignup() {
   const business = document.getElementById('f-business').value.trim();
   const email = document.getElementById('f-email').value.trim();
   const whatsapp = document.getElementById('f-whatsapp').value.trim();
+  const country = document.getElementById('f-country').value;
   const type = document.getElementById('f-type').value;
   const about = document.getElementById('f-about').value.trim();
   const password = document.getElementById('f-password').value;
 
-  if (!name || !business || !email || !whatsapp || !type || !password) {
-    alert('Please fill in all fields');
+  if (!name || !business || !email || !whatsapp || !country || !type || !password) {
+    showError('Please fill in all fields');
     return;
   }
-
   if (password.length < 6) {
-    alert('Password must be at least 6 characters');
+    showError('Password must be at least 6 characters');
     return;
   }
 
   const btn = document.getElementById('signup-btn');
   btn.disabled = true;
   btn.textContent = 'Submitting...';
+  document.getElementById('error-box').style.display = 'none';
 
   try {
     const res = await fetch(`${API}/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, business_name: business, email, whatsapp_number: whatsapp, business_type: type, about, password })
+      body: JSON.stringify({ name, business_name: business, email, whatsapp_number: whatsapp, business_type: type, about, password, country })
     });
-
     const data = await res.json();
-
     if (data.success) {
       document.getElementById('signup-form').style.display = 'none';
       document.getElementById('success-state').style.display = 'block';
       document.getElementById('success-number').textContent = whatsapp;
     } else {
-      alert(data.error || 'Something went wrong. Please try again.');
+      showError(data.error || 'Something went wrong. Please try again.');
       btn.disabled = false;
       btn.textContent = 'Create My Account →';
     }
   } catch(e) {
-    alert('Cannot reach server. Please try again.');
+    showError('Cannot reach server. Please try again.');
     btn.disabled = false;
     btn.textContent = 'Create My Account →';
   }
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-box');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
 }
 </script>
 </body>

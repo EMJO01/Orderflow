@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OrderFlow — Login</title>
+<title>Nexua OrderFlow — Login</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -40,7 +40,7 @@ input::placeholder{color:var(--muted);}
 <div class="container">
   <div class="logo">
     <div class="logo-mark">OrderFlow</div>
-    <div class="logo-sub">WhatsApp AI ordering system</div>
+    <div class="logo-sub">by Nexua — WhatsApp AI ordering system</div>
   </div>
 
   <div class="card">
@@ -93,8 +93,8 @@ async function login() {
     const data = await res.json();
 
     if (data.success) {
-    localStorage.setItem('rady_vendor', JSON.stringify(data.vendor));
-    window.location.href = 'dashboard.html';
+      localStorage.setItem('rady_vendor', JSON.stringify(data.vendor));
+      window.location.href = 'dashboard.html';
     } else {
       errorMsg.style.display = 'block';
       errorMsg.textContent = data.error || 'Invalid email or password';

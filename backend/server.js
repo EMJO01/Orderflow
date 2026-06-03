@@ -61,15 +61,15 @@ app.delete('/products/:id', async (req, res) => {
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 
 app.post('/signup', async (req, res) => {
-  const { name, business_name, email, whatsapp_number, business_type, about, password } = req.body;
+  const { name, business_name, email, whatsapp_number, business_type, about, password, country } = req.body;
   const { data: existing } = await supabase.from('vendors').select('id').eq('email', email).single();
   if (existing) return res.json({ success: false, error: 'Email already registered' });
   const { data, error } = await supabase
     .from('vendors')
-    .insert([{ name, business_name, email, whatsapp_number, business_type, about, password, active: false }])
+    .insert([{ name, business_name, email, whatsapp_number, business_type, about, password, active: false, country: country || 'Nigeria' }])
     .select();
   if (error) return res.json({ success: false, error: error.message });
-  console.log(`New signup: ${business_name} — ${email}`);
+  console.log(`New signup: ${business_name} (${country || 'Nigeria'}) — ${email}`);
   res.json({ success: true });
 });
 
@@ -79,7 +79,24 @@ app.post('/login', async (req, res) => {
     .from('vendors').select('*').eq('email', email).eq('password', password).single();
   if (error || !vendor) return res.json({ success: false, error: 'Invalid email or password' });
   if (!vendor.active) return res.json({ success: false, error: 'Your account is pending approval. We will notify you within 48 hours.' });
-  res.json({ success: true, vendor: { id: vendor.id, name: vendor.name, business_name: vendor.business_name, email: vendor.email, whatsapp_connected: vendor.whatsapp_connected } });
+  res.json({ success: true, vendor: {
+    id: vendor.id,
+    name: vendor.name,
+    business_name: vendor.business_name,
+    email: vendor.email,
+    whatsapp_connected: vendor.whatsapp_connected,
+    country: vendor.country || 'Nigeria',
+    bot_instructions: vendor.bot_instructions || ''
+  }});
+});
+
+// ─── BOT TRAINING ─────────────────────────────────────────────────────────────
+
+app.put('/vendors/:id/bot-instructions', async (req, res) => {
+  const { bot_instructions } = req.body;
+  const { error } = await supabase.from('vendors').update({ bot_instructions }).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
 });
 
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
@@ -100,7 +117,6 @@ app.put('/admin/vendors/:id', async (req, res) => {
 
 app.get('/vendors/:id/qr', async (req, res) => {
   const vendorId = req.params.id;
-
   const { data: vendor, error } = await supabase.from('vendors').select('*').eq('id', vendorId).single();
   if (error || !vendor) return res.status(404).send('Vendor not found');
   if (!vendor.active) return res.status(403).send('Vendor not approved yet');
@@ -133,37 +149,7 @@ app.get('/vendors/:id/qr', async (req, res) => {
       `);
     }
   };
-
   setTimeout(() => checkQR(), 1000);
-});
-
-app.get('/vendors/:id/status', async (req, res) => {
-  const { data: vendor } = await supabase.from('vendors').select('whatsapp_connected, business_name').eq('id', req.params.id).single();
-  res.json(vendor || { whatsapp_connected: false });
-});
-
-// ─── LEGACY SINGLE QR (your own bot) ─────────────────────────────────────────
-
-app.get('/qr', (req, res) => {
-  const qr = getQR('owner');
-  if (qr) {
-    res.send(`
-      <html><body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#000">
-      <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}" />
-      </body></html>
-    `);
-  } else {
-    res.send('QR not ready yet — wait 10 seconds and refresh');
-  }
-});
-
-app.use('/webhook', require('./webhook'));
-app.get('/', (req, res) => res.json({ message: 'Rady server running!' }));
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  connectVendor('owner', 'Rady Owner');
 });
 
 app.get('/vendors/:id/qr-image', async (req, res) => {
@@ -187,4 +173,33 @@ app.get('/vendors/:id/qr-image', async (req, res) => {
     }
   };
   setTimeout(() => checkQR(), 1000);
+});
+
+app.get('/vendors/:id/status', async (req, res) => {
+  const { data: vendor } = await supabase.from('vendors').select('whatsapp_connected, business_name').eq('id', req.params.id).single();
+  res.json(vendor || { whatsapp_connected: false });
+});
+
+// ─── LEGACY SINGLE QR ────────────────────────────────────────────────────────
+
+app.get('/qr', (req, res) => {
+  const qr = getQR('owner');
+  if (qr) {
+    res.send(`
+      <html><body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#000">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}" />
+      </body></html>
+    `);
+  } else {
+    res.send('QR not ready yet — wait 10 seconds and refresh');
+  }
+});
+
+app.use('/webhook', require('./webhook'));
+app.get('/', (req, res) => res.json({ message: 'Nexua OrderFlow server running!' }));
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Nexua OrderFlow server running on port ${PORT}`);
+  connectVendor('owner', 'Nexua Owner');
 });

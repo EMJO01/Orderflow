@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rady — Vendor Dashboard</title>
+<title>Nexua OrderFlow — Vendor Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -52,8 +52,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;}
 .stat-value{font-family:'Syne',sans-serif;font-size:26px;font-weight:700;margin:6px 0 4px;}
 .stat-change{font-size:12px;color:var(--accent);}
-
-/* WhatsApp Banner */
 .wa-banner{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:24px;transition:border-color .2s;}
 .wa-banner.connected{border-left:3px solid var(--accent);}
 .wa-banner.disconnected{border-left:3px solid #FF6B35;}
@@ -64,21 +62,16 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .wa-banner-sub{font-size:12px;color:var(--muted);}
 .wa-status-connected{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--accent);font-weight:500;}
 .wa-dot{width:8px;height:8px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite;}
-.wa-status-disconnected{display:flex;align-items:center;gap:6px;font-size:12px;color:#FF6B35;font-weight:500;}
-.wa-dot-off{width:8px;height:8px;background:#FF6B35;border-radius:50%;}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.85)}}
-
-/* QR Modal */
 .qr-section{margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:none;}
 .qr-section.open{display:block;}
 .qr-frame{display:flex;align-items:flex-start;gap:24px;}
 .qr-box{background:#fff;border-radius:12px;padding:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.qr-box img{width:180px;height:180px;display:block;}
+.qr-box img{width:220px;height:220px;display:block;}
 .qr-steps{flex:1;}
 .qr-step{display:flex;gap:10px;margin-bottom:12px;font-size:13px;line-height:1.5;}
 .qr-num{width:22px;height:22px;border-radius:50%;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px;}
 .qr-loading{text-align:center;padding:40px;color:var(--muted);font-size:13px;}
-
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
 .section-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;}
 .search-input{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 14px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;width:200px;outline:none;transition:border-color .15s;}
@@ -139,13 +132,23 @@ textarea{resize:vertical;min-height:70px;}
 .toast.show{transform:translateX(0);}
 .loading{text-align:center;padding:40px;color:var(--muted);font-size:14px;}
 .cell-small{font-size:12px;color:var(--muted);}
-
-/* Login Gate */
 #login-gate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;}
 .login-box{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:36px;width:380px;}
 .login-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:24px;color:var(--accent);margin-bottom:4px;}
 .login-sub{font-size:13px;color:var(--muted);margin-bottom:28px;}
 .login-error{background:var(--red-dim);border:1px solid var(--red);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:16px;display:none;}
+
+/* Bot Training */
+.training-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:20px;}
+.training-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:6px;}
+.training-sub{font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5;}
+.training-textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s;resize:vertical;min-height:160px;line-height:1.6;}
+.training-textarea:focus{border-color:var(--accent);}
+.training-textarea::placeholder{color:var(--muted);}
+.examples-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.example-chip{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;color:var(--muted);cursor:pointer;transition:all .12s;line-height:1.4;}
+.example-chip:hover{border-color:var(--accent);color:var(--text);}
+.example-chip strong{display:block;color:var(--text);font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
 </style>
 </head>
 <body>
@@ -153,7 +156,7 @@ textarea{resize:vertical;min-height:70px;}
 <!-- Login Gate -->
 <div id="login-gate">
   <div class="login-box">
-    <div class="login-logo">Rady</div>
+    <div class="login-logo">OrderFlow</div>
     <div class="login-sub">Sign in to your vendor dashboard</div>
     <div class="login-error" id="login-error"></div>
     <div class="form-row"><label>Email</label><input type="text" id="login-email" placeholder="you@example.com"></div>
@@ -165,12 +168,13 @@ textarea{resize:vertical;min-height:70px;}
 <div class="shell" id="app" style="display:none;">
   <aside class="sidebar">
     <div class="logo">
-      <div class="logo-mark">Rady</div>
-      <div class="logo-sub">Vendor Dashboard</div>
+      <div class="logo-mark">OrderFlow</div>
+      <div class="logo-sub">by Nexua</div>
     </div>
     <nav class="nav">
       <div class="nav-item active" onclick="showPage('products',this)">👕 Products</div>
       <div class="nav-item" onclick="showPage('whatsapp',this)">💬 WhatsApp</div>
+      <div class="nav-item" onclick="showPage('training',this)">🧠 Bot Training</div>
       <div class="nav-item" onclick="showPage('orders',this)">🛒 Orders</div>
       <div class="nav-item" onclick="showPage('analytics',this)">📊 Analytics</div>
     </nav>
@@ -200,15 +204,13 @@ textarea{resize:vertical;min-height:70px;}
         <div class="stat-card green"><div class="stat-label">Total Products</div><div class="stat-value" id="stat-total">0</div><div class="stat-change">Your catalog</div></div>
         <div class="stat-card orange"><div class="stat-label">Active</div><div class="stat-value" id="stat-active">0</div><div class="stat-change">Visible to customers</div></div>
         <div class="stat-card blue"><div class="stat-label">Orders Today</div><div class="stat-value">0</div><div class="stat-change">Via WhatsApp</div></div>
-        <div class="stat-card purple"><div class="stat-label">Revenue Today</div><div class="stat-value">₦0</div><div class="stat-change">Keep pushing!</div></div>
+        <div class="stat-card purple"><div class="stat-label">Revenue Today</div><div class="stat-value" id="stat-revenue">0</div><div class="stat-change">Keep pushing!</div></div>
       </div>
       <div class="section-header">
         <div class="section-title">Your Catalog</div>
         <input class="search-input" type="text" placeholder="Search products..." oninput="filterProducts(this.value)">
       </div>
-
       <div class="filter-pills" id="filter-pills"></div>
-
       <div class="products-table">
         <div class="table-head"><div>Product</div><div>Price</div><div>Category</div><div>Sizes</div><div>Status</div><div>Actions</div></div>
         <div id="products-list"><div class="loading">Loading catalog...</div></div>
@@ -232,13 +234,67 @@ textarea{resize:vertical;min-height:70px;}
           <div id="qr-content" class="qr-loading">Loading QR code...</div>
         </div>
       </div>
-
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;">
         <div class="section-title" style="margin-bottom:16px;">How it works</div>
         <div class="qr-step"><div class="qr-num">1</div><div>Click <strong>Connect WhatsApp</strong> above and scan the QR with your WhatsApp number</div></div>
         <div class="qr-step"><div class="qr-num">2</div><div>Your bot goes live instantly — customers text your number and the AI replies automatically</div></div>
         <div class="qr-step"><div class="qr-num">3</div><div>The bot only shows <strong>your products</strong> — completely separate from other vendors</div></div>
         <div class="qr-step"><div class="qr-num">4</div><div>Keep your phone connected to the internet so the bot stays online</div></div>
+      </div>
+    </div>
+
+    <!-- BOT TRAINING PAGE -->
+    <div class="content" id="page-training" style="display:none;">
+      <div class="training-card">
+        <div class="training-title">🧠 Train Your Bot</div>
+        <div class="training-sub">Tell your bot how to behave — your hours, policies, delivery info, or anything customers frequently ask. The bot will follow these rules in every conversation.</div>
+
+        <div class="examples-grid">
+          <div class="example-chip" onclick="addExample('I am unavailable every day from 2pm to 5pm. Let customers know during this time.')">
+            <strong>⏰ Availability</strong>
+            "I'm unavailable from 2pm–5pm daily"
+          </div>
+          <div class="example-chip" onclick="addExample('Delivery takes 2-3 business days. Delivery fee is charged based on location.')">
+            <strong>🚚 Delivery</strong>
+            "Delivery takes 2-3 business days"
+          </div>
+          <div class="example-chip" onclick="addExample('We do not accept returns or refunds after 24 hours of delivery.')">
+            <strong>↩️ Returns</strong>
+            "No refunds after 24 hours"
+          </div>
+          <div class="example-chip" onclick="addExample('Minimum order amount is 5000. Orders below this cannot be processed.')">
+            <strong>💰 Minimum Order</strong>
+            "Minimum order amount applies"
+          </div>
+          <div class="example-chip" onclick="addExample('We accept bank transfer and cash on delivery as payment methods.')">
+            <strong>💳 Payment</strong>
+            "Bank transfer & cash on delivery"
+          </div>
+          <div class="example-chip" onclick="addExample('Always ask for the customer\'s full name, address, and phone number before confirming any order.')">
+            <strong>📋 Order Details</strong>
+            "Always collect name & address"
+          </div>
+        </div>
+
+        <label style="margin-bottom:8px;">Your Bot Instructions</label>
+        <textarea class="training-textarea" id="bot-instructions" placeholder="Examples:
+• I am unavailable every day from 2pm to 5pm. Let customers know.
+• Delivery takes 2-3 business days within the city.
+• We do not accept returns after 24 hours.
+• Minimum order is 5,000. Always confirm before proceeding.
+• Payment is via bank transfer only — share account details when order is confirmed."></textarea>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;">
+          <div style="font-size:12px;color:var(--muted);">Changes take effect on the next customer message</div>
+          <button class="btn btn-primary" onclick="saveInstructions()">Save Instructions</button>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;">
+        <div class="section-title" style="margin-bottom:12px;">💡 Tips for better bot training</div>
+        <div class="qr-step"><div class="qr-num">1</div><div>Be specific — "I'm unavailable from 2pm to 5pm WAT" is better than "I'm sometimes busy"</div></div>
+        <div class="qr-step"><div class="qr-num">2</div><div>Add your most common FAQs — delivery time, payment methods, return policy</div></div>
+        <div class="qr-step"><div class="qr-num">3</div><div>You can update these anytime — the bot learns instantly on the next conversation</div></div>
       </div>
     </div>
 
@@ -264,7 +320,7 @@ textarea{resize:vertical;min-height:70px;}
     <div class="modal-body">
       <div class="form-row"><label>Product Name</label><input type="text" id="f-name" placeholder="e.g. Classic Oversized Hoodie"></div>
       <div class="form-row-2">
-        <div><label>Price (₦)</label><input type="number" id="f-price" placeholder="18500"></div>
+        <div><label>Price (<span id="currency-label">₦</span>)</label><input type="number" id="f-price" placeholder="18500"></div>
         <div><label>Category</label>
           <select id="f-category">
             <option>Hoodies</option><option>Caps</option><option>T-Shirts</option>
@@ -302,6 +358,15 @@ let products = [], selectedEmoji = '👕', editingId = null;
 let currentCat = 'all', searchTerm = '';
 let vendor = null;
 
+const CURRENCY_MAP = {
+  'Nigeria': '₦', 'Germany': '€', 'UK': '£', 'US': '$',
+  'Ghana': 'GH₵', 'Kenya': 'KSh', 'South Africa': 'R', 'Other': ''
+};
+
+function getCurrency() {
+  return CURRENCY_MAP[vendor?.country] || '₦';
+}
+
 // ── AUTH ──────────────────────────────────────────────────────────────────────
 
 async function doLogin() {
@@ -337,27 +402,56 @@ function initDashboard() {
   const initials = vendor.business_name?.charAt(0).toUpperCase() || 'V';
   document.getElementById('sidebar-avatar').textContent = initials;
   document.getElementById('sidebar-name').textContent = vendor.business_name;
+  document.getElementById('currency-label').textContent = getCurrency();
+  document.getElementById('stat-revenue').textContent = getCurrency() + '0';
+  if (vendor.bot_instructions) {
+    document.getElementById('bot-instructions').value = vendor.bot_instructions;
+  }
   loadProducts();
   checkWAStatus();
 }
 
-// Check on load
 const saved = localStorage.getItem('rady_vendor');
 if (saved) { vendor = JSON.parse(saved); initDashboard(); }
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 
 function showPage(page, el) {
-  ['products','whatsapp','orders','analytics'].forEach(p => {
+  ['products','whatsapp','training','orders','analytics'].forEach(p => {
     document.getElementById(`page-${p}`).style.display = 'none';
   });
   document.getElementById(`page-${page}`).style.display = 'block';
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   el.classList.add('active');
-  const titles = {products:'Products',whatsapp:'WhatsApp Bot',orders:'Orders',analytics:'Analytics'};
+  const titles = {products:'Products',whatsapp:'WhatsApp Bot',training:'Bot Training',orders:'Orders',analytics:'Analytics'};
   document.getElementById('page-title').textContent = titles[page];
   document.getElementById('add-btn').style.display = page === 'products' ? 'flex' : 'none';
   if (page === 'whatsapp') checkWAStatus();
+}
+
+// ── BOT TRAINING ──────────────────────────────────────────────────────────────
+
+function addExample(text) {
+  const ta = document.getElementById('bot-instructions');
+  ta.value = ta.value ? ta.value + '\n' + text : text;
+  ta.focus();
+}
+
+async function saveInstructions() {
+  const instructions = document.getElementById('bot-instructions').value.trim();
+  try {
+    const res = await fetch(`${API}/vendors/${vendor.id}/bot-instructions`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bot_instructions: instructions })
+    });
+    const data = await res.json();
+    if (data.success) {
+      vendor.bot_instructions = instructions;
+      localStorage.setItem('rady_vendor', JSON.stringify(vendor));
+      showToast('✅ Bot instructions saved!');
+    }
+  } catch(e) { showToast('⚠️ Could not save instructions.'); }
 }
 
 // ── WHATSAPP ──────────────────────────────────────────────────────────────────
@@ -402,9 +496,7 @@ async function startQR() {
   qrSection.classList.add('open');
   qrContent.innerHTML = '<div class="qr-loading">⏳ Generating QR code...<br><small style="color:var(--muted);margin-top:8px;display:block">This takes about 5 seconds</small></div>';
 
-  try {
-    await fetch(`${API}/vendors/${vendor.id}/qr`);
-  } catch(e) {}
+  try { await fetch(`${API}/vendors/${vendor.id}/qr`); } catch(e) {}
 
   let attempts = 0;
   qrPolling = setInterval(async () => {
@@ -422,24 +514,21 @@ async function startQR() {
     } catch(e) {}
 
     if (attempts % 5 === 0) {
-      try {
-        const imgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`${API}/vendors/${vendor.id}/qr`)}`;
-        qrContent.innerHTML = `
+      qrContent.innerHTML = `
         <div class="qr-frame">
           <div class="qr-box">
-            <img src="https://rady-bot.onrender.com/vendors/${vendor.id}/qr-image" 
-                style="width:220px;height:220px;display:block;" 
-                onerror="this.src=''" alt="QR Code"/>
+            <img src="${API}/vendors/${vendor.id}/qr-image?t=${Date.now()}"
+                 style="width:220px;height:220px;display:block;border-radius:8px;"
+                 alt="QR Code"/>
           </div>
-            <div class="qr-steps">
-              <div class="qr-step"><div class="qr-num">1</div><div>Open WhatsApp on your phone</div></div>
-              <div class="qr-step"><div class="qr-num">2</div><div>Tap <strong>⋮ → Linked Devices → Link a Device</strong></div></div>
-              <div class="qr-step"><div class="qr-num">3</div><div>Point your camera at the QR code</div></div>
-              <div class="qr-step"><div class="qr-num">4</div><div>Your bot goes live instantly! 🎉</div></div>
-              <p style="font-size:11px;color:var(--muted);margin-top:12px;">QR refreshes automatically. Keep this page open.</p>
-            </div>
-          </div>`;
-      } catch(e) {}
+          <div class="qr-steps">
+            <div class="qr-step"><div class="qr-num">1</div><div>Open WhatsApp on your phone</div></div>
+            <div class="qr-step"><div class="qr-num">2</div><div>Tap <strong>⋮ → Linked Devices → Link a Device</strong></div></div>
+            <div class="qr-step"><div class="qr-num">3</div><div>Point your camera at the QR code</div></div>
+            <div class="qr-step"><div class="qr-num">4</div><div>Your bot goes live instantly! 🎉</div></div>
+            <p style="font-size:11px;color:var(--muted);margin-top:12px;">QR refreshes automatically. Keep this page open.</p>
+          </div>
+        </div>`;
     }
 
     if (attempts > 120) {
@@ -464,8 +553,8 @@ async function loadProducts() {
 
 function renderProducts() {
   const list = document.getElementById('products-list');
+  const currency = getCurrency();
 
-  // Build dynamic category pills from actual products
   const categoryEmojis = {
     'Hoodies':'🧥','Caps':'🧢','T-Shirts':'👕','Accessories':'👜',
     'Joggers':'👖','Jackets':'🧣','Food':'🍛','Drinks':'🥤',
@@ -478,7 +567,6 @@ function renderProducts() {
       `<button class="pill ${currentCat===cat?'active':''}" onclick="filterCat('${cat}',this)">${categoryEmojis[cat]||'📦'} ${cat}</button>`
     ).join('');
 
-  // Filter and render rows
   let filtered = products.filter(p => {
     const matchCat = currentCat === 'all' || p.category === currentCat;
     const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -494,7 +582,7 @@ function renderProducts() {
           <div class="product-emoji">${p.emoji || '📦'}</div>
           <div><div class="product-name">${p.name}</div><div class="product-category">${p.description || ''}</div></div>
         </div>
-        <div class="price">₦${Number(p.price).toLocaleString()}</div>
+        <div class="price">${currency}${Number(p.price).toLocaleString()}</div>
         <div class="cell-small">${p.category}</div>
         <div class="cell-small">${p.sizes || '—'}</div>
         <div><span class="badge ${p.active ? 'badge-active':'badge-inactive'}">${p.active ? 'Active':'Hidden'}</span></div>

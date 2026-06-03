@@ -93,8 +93,8 @@ async function login() {
     const data = await res.json();
 
     if (data.success) {
-      localStorage.setItem('vendor', JSON.stringify(data.vendor));
-      window.location.href = 'index.html';
+    localStorage.setItem('rady_vendor', JSON.stringify(data.vendor));
+    window.location.href = 'dashboard.html';
     } else {
       errorMsg.style.display = 'block';
       errorMsg.textContent = data.error || 'Invalid email or password';

@@ -87,7 +87,8 @@ async function connectVendor(vendorId, vendorName) {
       if (vendorId !== 'owner') query = query.eq('vendor_id', vendorId);
       const { data: products } = await query;
 
-      const reply = await generateReply(text, products || [], vendorName);
+      const reply = await generateReply(customerMessage, products, vendorName, vendor.country || 'Nigeria', vendor.bot_instructions || '');
+      const { data: vendor } = await supabase.from('vendors').select('country, bot_instructions').eq('id', vendorId).single();
       await sock.sendMessage(from, { text: reply });
       console.log(`[${vendorName}] Replied: ${reply}`);
     } catch (err) {

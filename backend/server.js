@@ -115,7 +115,7 @@ app.put('/admin/vendors/:id', async (req, res) => {
 
 // ─── WHATSAPP ─────────────────────────────────────────────────────────────────
 
-// Step 1: trigger connection (fire and forget — no timeout risk)
+// Step 1: trigger connection — returns immediately, no timeout risk
 app.post('/vendors/:id/connect', async (req, res) => {
   const vendorId = req.params.id;
   const { data: vendor, error } = await supabase.from('vendors').select('*').eq('id', vendorId).single();
@@ -125,41 +125,16 @@ app.post('/vendors/:id/connect', async (req, res) => {
   res.json({ success: true });
 });
 
-// Step 2: return QR instantly if ready, 202 if not yet
-app.get('/vendors/:id/qr-image', async (req, res) => {
+// Step 2: return QR URL as JSON — never redirects, never times out
+app.get('/vendors/:id/qr-image', (req, res) => {
   const qr = getQR(req.params.id);
   if (qr) {
-    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`;
-    return res.redirect(qrImageUrl);
+    return res.json({
+      status: 'ready',
+      url: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`
+    });
   }
   res.status(202).json({ status: 'not_ready' });
-});
-
-// Legacy full-page QR (kept for fallback)
-app.get('/vendors/:id/qr', async (req, res) => {
-  const vendorId = req.params.id;
-  const { data: vendor, error } = await supabase.from('vendors').select('*').eq('id', vendorId).single();
-  if (error || !vendor) return res.status(404).send('Vendor not found');
-  if (!vendor.active) return res.status(403).send('Vendor not approved yet');
-  await connectVendor(vendorId, vendor.business_name);
-  const checkQR = (attempts = 0) => {
-    const qr = getQR(vendorId);
-    if (qr) {
-      return res.send(`
-        <html>
-        <head><meta http-equiv="refresh" content="30"></head>
-        <body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#000;color:white;font-family:sans-serif">
-          <h2 style="margin-bottom:20px">${vendor.business_name}</h2>
-          <p style="margin-bottom:20px;color:#aaa">Scan with WhatsApp to connect your bot</p>
-          <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}" />
-          <p style="margin-top:20px;color:#aaa;font-size:12px">Page refreshes every 30s</p>
-        </body></html>
-      `);
-    }
-    if (attempts < 15) setTimeout(() => checkQR(attempts + 1), 1000);
-    else res.send(`<html><head><meta http-equiv="refresh" content="5"></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#000;color:white"><p>Connecting... please wait</p></body></html>`);
-  };
-  setTimeout(() => checkQR(), 1000);
 });
 
 app.get('/vendors/:id/status', async (req, res) => {

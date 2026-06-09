@@ -151,7 +151,6 @@ textarea{resize:vertical;min-height:70px;}
 </head>
 <body>
 
-<!-- Login Gate -->
 <div id="login-gate">
   <div class="login-box">
     <div class="login-logo">OrderFlow</div>
@@ -328,12 +327,12 @@ const API = 'https://rady-bot.onrender.com';
 let products = [], selectedEmoji = '👕', editingId = null;
 let currentCat = 'all', searchTerm = '';
 let vendor = null;
+let qrPolling = null, statusPoller = null;
 
 const CURRENCY_MAP = {
   'Nigeria':'₦','Germany':'€','UK':'£','US':'$',
   'Ghana':'GH₵','Kenya':'KSh','South Africa':'R','Other':''
 };
-
 function getCurrency() { return CURRENCY_MAP[vendor?.country] || '₦'; }
 
 // ── AUTH ──────────────────────────────────────────────────────────────────────
@@ -412,9 +411,7 @@ async function saveInstructions() {
 
 // ── WHATSAPP ──────────────────────────────────────────────────────────────────
 
-let waConnected  = false;
-let qrPolling    = null;
-let statusPoller = null;
+let waConnected = false;
 
 async function checkWAStatus() {
   if (!vendor) return;
@@ -427,10 +424,10 @@ async function checkWAStatus() {
 }
 
 function renderWABanner() {
-  const banner    = document.getElementById('wa-banner');
-  const title     = document.getElementById('wa-title');
-  const sub       = document.getElementById('wa-sub');
-  const statusArea= document.getElementById('wa-status-area');
+  const banner     = document.getElementById('wa-banner');
+  const title      = document.getElementById('wa-title');
+  const sub        = document.getElementById('wa-sub');
+  const statusArea = document.getElementById('wa-status-area');
 
   if (waConnected) {
     banner.className = 'wa-banner connected';
@@ -449,12 +446,16 @@ function renderWABanner() {
 }
 
 async function startQR() {
+  // Stop any existing pollers
+  if (qrPolling)    { clearInterval(qrPolling);    qrPolling    = null; }
+  if (statusPoller) { clearInterval(statusPoller); statusPoller = null; }
+
   const qrSection = document.getElementById('qr-section');
   const qrContent = document.getElementById('qr-content');
   qrSection.classList.add('open');
-  qrContent.innerHTML = '<div class="qr-loading">⏳ Connecting to WhatsApp...<br><small style="color:var(--muted);margin-top:8px;display:block">Generating your QR code, this takes about 10 seconds</small></div>';
+  qrContent.innerHTML = '<div class="qr-loading">⏳ Connecting to WhatsApp...<br><small style="color:var(--muted);margin-top:8px;display:block">Generating your QR code, please wait</small></div>';
 
-  // Step 1: trigger connection (fire and forget — no 504 risk)
+  // Step 1: trigger connection — returns instantly, no 504 risk
   try {
     await fetch(`${API}/vendors/${vendor.id}/connect`, { method: 'POST' });
   } catch(e) {}
@@ -462,44 +463,42 @@ async function startQR() {
   let qrShown    = false;
   let qrAttempts = 0;
 
-  // Step 2: poll for QR every 2 seconds
+  // Step 2: poll /qr-image every 2s — server returns JSON {status, url}, never redirects
   qrPolling = setInterval(async () => {
     qrAttempts++;
     try {
-      const res = await fetch(`${API}/vendors/${vendor.id}/qr-image`);
-      if (res.ok && res.redirected) {
-        // QR is ready
-        if (!qrShown) {
-          qrShown = true;
-          qrContent.innerHTML = `
-            <div class="qr-frame">
-              <div class="qr-box">
-                <img src="${res.url}" style="width:220px;height:220px;display:block;border-radius:8px;" alt="QR Code"/>
-              </div>
-              <div class="qr-steps">
-                <div class="qr-step"><div class="qr-num">1</div><div>Open WhatsApp on your phone</div></div>
-                <div class="qr-step"><div class="qr-num">2</div><div>Tap <strong>⋮ → Linked Devices → Link a Device</strong></div></div>
-                <div class="qr-step"><div class="qr-num">3</div><div>Point your camera at the QR code</div></div>
-                <div class="qr-step"><div class="qr-num">4</div><div>Your bot goes live instantly! 🎉</div></div>
-                <p style="font-size:11px;color:var(--muted);margin-top:12px;">QR refreshes automatically. Keep this page open.</p>
-              </div>
-            </div>`;
-        }
-      } else if (res.status === 202) {
-        // Not ready yet — keep waiting
-        if (qrAttempts > 5 && !qrShown) {
-          qrContent.innerHTML = '<div class="qr-loading">⏳ Still connecting...<br><small style="color:var(--muted);margin-top:8px;display:block">Almost there, please wait</small></div>';
-        }
+      const res  = await fetch(`${API}/vendors/${vendor.id}/qr-image`);
+      const data = await res.json();
+
+      if (data.status === 'ready' && data.url && !qrShown) {
+        qrShown = true;
+        // Set img src from the JSON url — browser never hits qr-image again
+        qrContent.innerHTML = `
+          <div class="qr-frame">
+            <div class="qr-box">
+              <img src="${data.url}" style="width:220px;height:220px;display:block;border-radius:8px;" alt="QR Code"/>
+            </div>
+            <div class="qr-steps">
+              <div class="qr-step"><div class="qr-num">1</div><div>Open WhatsApp on your phone</div></div>
+              <div class="qr-step"><div class="qr-num">2</div><div>Tap <strong>⋮ → Linked Devices → Link a Device</strong></div></div>
+              <div class="qr-step"><div class="qr-num">3</div><div>Point your camera at the QR code</div></div>
+              <div class="qr-step"><div class="qr-num">4</div><div>Your bot goes live instantly! 🎉</div></div>
+              <p style="font-size:11px;color:var(--muted);margin-top:12px;">QR refreshes automatically. Keep this page open.</p>
+            </div>
+          </div>`;
       }
+      // data.status === 'not_ready' → just keep polling
     } catch(e) {}
 
     if (qrAttempts > 60) {
-      clearInterval(qrPolling);
-      qrContent.innerHTML = '<div class="qr-loading">⚠️ Timed out.<br><button class="btn btn-ghost" onclick="startQR()" style="margin-top:12px">Try again</button></div>';
+      clearInterval(qrPolling); qrPolling = null;
+      if (!qrShown) {
+        qrContent.innerHTML = '<div class="qr-loading">⚠️ Timed out.<br><button class="btn btn-ghost" onclick="startQR()" style="margin-top:12px">Try again</button></div>';
+      }
     }
   }, 2000);
 
-  // Step 3: poll status separately to detect when scan is complete
+  // Step 3: poll /status every 3s to detect successful scan
   statusPoller = setInterval(async () => {
     try {
       const res  = await fetch(`${API}/vendors/${vendor.id}/status`);
@@ -531,11 +530,11 @@ async function loadProducts() {
 function renderProducts() {
   const list     = document.getElementById('products-list');
   const currency = getCurrency();
-  const categoryEmojis = {'Hoodies':'🧥','Caps':'🧢','T-Shirts':'👕','Accessories':'👜','Joggers':'👖','Jackets':'🧣','Food':'🍛','Drinks':'🥤','Electronics':'📱','Other':'📦'};
+  const catEmoji = {'Hoodies':'🧥','Caps':'🧢','T-Shirts':'👕','Accessories':'👜','Joggers':'👖','Jackets':'🧣','Food':'🍛','Drinks':'🥤','Electronics':'📱','Other':'📦'};
   const existingCats = [...new Set(products.map(p => p.category).filter(Boolean))];
   const pillsEl  = document.getElementById('filter-pills');
   pillsEl.innerHTML = `<button class="pill ${currentCat==='all'?'active':''}" onclick="filterCat('all',this)">All</button>` +
-    existingCats.map(cat => `<button class="pill ${currentCat===cat?'active':''}" onclick="filterCat('${cat}',this)">${categoryEmojis[cat]||'📦'} ${cat}</button>`).join('');
+    existingCats.map(cat => `<button class="pill ${currentCat===cat?'active':''}" onclick="filterCat('${cat}',this)">${catEmoji[cat]||'📦'} ${cat}</button>`).join('');
 
   const filtered = products.filter(p => {
     const matchCat    = currentCat === 'all' || p.category === currentCat;
@@ -543,25 +542,22 @@ function renderProducts() {
     return matchCat && matchSearch;
   });
 
-  if (!filtered.length) {
-    list.innerHTML = '<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">No products yet</div><div>Click + Add Product to get started</div></div>';
-  } else {
-    list.innerHTML = filtered.map(p => `
-      <div class="product-row">
-        <div class="product-info">
-          <div class="product-emoji">${p.emoji || '📦'}</div>
-          <div><div class="product-name">${p.name}</div><div class="product-category">${p.description || ''}</div></div>
-        </div>
-        <div class="price">${currency}${Number(p.price).toLocaleString()}</div>
-        <div class="cell-small">${p.category}</div>
-        <div class="cell-small">${p.sizes || '—'}</div>
-        <div><span class="badge ${p.active?'badge-active':'badge-inactive'}">${p.active?'Active':'Hidden'}</span></div>
-        <div class="actions">
-          <button class="icon-btn" onclick="editProduct(${p.id})">✏️</button>
-          <button class="icon-btn delete" onclick="deleteProduct(${p.id})">🗑</button>
-        </div>
-      </div>`).join('');
-  }
+  list.innerHTML = filtered.length ? filtered.map(p => `
+    <div class="product-row">
+      <div class="product-info">
+        <div class="product-emoji">${p.emoji || '📦'}</div>
+        <div><div class="product-name">${p.name}</div><div class="product-category">${p.description || ''}</div></div>
+      </div>
+      <div class="price">${currency}${Number(p.price).toLocaleString()}</div>
+      <div class="cell-small">${p.category}</div>
+      <div class="cell-small">${p.sizes || '—'}</div>
+      <div><span class="badge ${p.active?'badge-active':'badge-inactive'}">${p.active?'Active':'Hidden'}</span></div>
+      <div class="actions">
+        <button class="icon-btn" onclick="editProduct(${p.id})">✏️</button>
+        <button class="icon-btn delete" onclick="deleteProduct(${p.id})">🗑</button>
+      </div>
+    </div>`).join('')
+  : '<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">No products yet</div><div>Click + Add Product to get started</div></div>';
 
   document.getElementById('stat-total').textContent  = products.length;
   document.getElementById('stat-active').textContent = products.filter(p => p.active).length;
@@ -573,7 +569,6 @@ function filterCat(cat, el) {
   el.classList.add('active');
   renderProducts();
 }
-
 function filterProducts(val) { searchTerm = val; renderProducts(); }
 
 async function saveProduct() {
@@ -582,12 +577,12 @@ async function saveProduct() {
   if (!name || !price) { showToast('⚠️ Fill in name and price'); return; }
   const product = {
     name, price,
-    category: document.getElementById('f-category').value,
-    desc:     document.getElementById('f-desc').value.trim(),
-    emoji:    selectedEmoji,
-    active:   document.getElementById('toggle-active').classList.contains('on'),
-    sizes:    document.getElementById('f-sizes').value.trim(),
-    colors:   document.getElementById('f-colors').value.trim(),
+    category:  document.getElementById('f-category').value,
+    desc:      document.getElementById('f-desc').value.trim(),
+    emoji:     selectedEmoji,
+    active:    document.getElementById('toggle-active').classList.contains('on'),
+    sizes:     document.getElementById('f-sizes').value.trim(),
+    colors:    document.getElementById('f-colors').value.trim(),
     vendor_id: vendor.id
   };
   try {
@@ -612,13 +607,13 @@ async function deleteProduct(id) {
 function editProduct(id) {
   const p = products.find(x => x.id === id);
   editingId = id;
-  document.getElementById('modal-title').textContent = 'Edit Product';
-  document.getElementById('f-name').value    = p.name;
-  document.getElementById('f-price').value   = p.price;
-  document.getElementById('f-category').value= p.category;
-  document.getElementById('f-desc').value    = p.description || '';
-  document.getElementById('f-sizes').value   = p.sizes || '';
-  document.getElementById('f-colors').value  = p.colors || '';
+  document.getElementById('modal-title').textContent  = 'Edit Product';
+  document.getElementById('f-name').value             = p.name;
+  document.getElementById('f-price').value            = p.price;
+  document.getElementById('f-category').value         = p.category;
+  document.getElementById('f-desc').value             = p.description || '';
+  document.getElementById('f-sizes').value            = p.sizes || '';
+  document.getElementById('f-colors').value           = p.colors || '';
   selectedEmoji = p.emoji || '📦';
   p.active ? document.getElementById('toggle-active').classList.add('on') : document.getElementById('toggle-active').classList.remove('on');
   renderEmojiPicker();

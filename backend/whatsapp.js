@@ -3,12 +3,10 @@ const { Boom } = require('@hapi/boom');
 const path = require('path');
 const fs = require('fs');
 
-// Store one connection per vendor
 const connections = {};
 const qrCodes = {};
 
 async function connectVendor(vendorId, vendorName) {
-  // Already connected
   if (connections[vendorId]?.isReady) {
     console.log(`✅ Vendor ${vendorName} already connected`);
     return;
@@ -40,7 +38,6 @@ async function connectVendor(vendorId, vendorName) {
       connections[vendorId].isReady = true;
       qrCodes[vendorId] = null;
 
-      // Update vendor status in Supabase
       if (vendorId !== 'owner') {
         const supabase = require('./db');
         await supabase.from('vendors').update({ whatsapp_connected: true }).eq('id', vendorId);
@@ -82,13 +79,27 @@ async function connectVendor(vendorId, vendorName) {
       const supabase = require('./db');
       const { generateReply } = require('./ai');
 
-      // Fetch only THIS vendor's products
+      // 1. Fetch vendor details FIRST
+      const { data: vendor } = await supabase
+        .from('vendors')
+        .select('country, bot_instructions')
+        .eq('id', vendorId)
+        .single();
+
+      // 2. Fetch this vendor's active products
       let query = supabase.from('products').select('*').eq('active', true);
       if (vendorId !== 'owner') query = query.eq('vendor_id', vendorId);
       const { data: products } = await query;
 
-      const reply = await generateReply(customerMessage, products, vendorName, vendor.country || 'Nigeria', vendor.bot_instructions || '');
-      const { data: vendor } = await supabase.from('vendors').select('country, bot_instructions').eq('id', vendorId).single();
+      // 3. Generate and send reply
+      const reply = await generateReply(
+        text,
+        products || [],
+        vendorName,
+        vendor?.country || 'Nigeria',
+        vendor?.bot_instructions || ''
+      );
+
       await sock.sendMessage(from, { text: reply });
       console.log(`[${vendorName}] Replied: ${reply}`);
     } catch (err) {

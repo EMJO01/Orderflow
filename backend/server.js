@@ -198,12 +198,6 @@ app.get('/qr', (req, res) => {
 app.use('/webhook', require('./webhook'));
 app.get('/', (req, res) => res.json({ message: 'Nexua OrderFlow server running!' }));
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Nexua OrderFlow server running on port ${PORT}`);
-  connectVendor('owner', 'Nexua Owner');
-});
-
 app.post('/vendors/:id/disconnect', async (req, res) => {
   const { error } = await supabase
     .from('vendors')
@@ -211,4 +205,10 @@ app.post('/vendors/:id/disconnect', async (req, res) => {
     .eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Nexua OrderFlow server running on port ${PORT}`);
+  connectVendor('owner', 'Nexua Owner');
 });

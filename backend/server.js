@@ -203,3 +203,12 @@ app.listen(PORT, () => {
   console.log(`Nexua OrderFlow server running on port ${PORT}`);
   connectVendor('owner', 'Nexua Owner');
 });
+
+app.post('/vendors/:id/disconnect', async (req, res) => {
+  const { error } = await supabase
+    .from('vendors')
+    .update({ whatsapp_connected: false })
+    .eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});

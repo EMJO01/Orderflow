@@ -113,16 +113,35 @@ app.put('/admin/vendors/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── WHATSAPP QR PER VENDOR ───────────────────────────────────────────────────
+// ─── WHATSAPP ─────────────────────────────────────────────────────────────────
 
+// Step 1: trigger connection (fire and forget — no timeout risk)
+app.post('/vendors/:id/connect', async (req, res) => {
+  const vendorId = req.params.id;
+  const { data: vendor, error } = await supabase.from('vendors').select('*').eq('id', vendorId).single();
+  if (error || !vendor) return res.status(404).json({ error: 'Vendor not found' });
+  if (!vendor.active) return res.status(403).json({ error: 'Vendor not approved' });
+  connectVendor(vendorId, vendor.business_name); // fire and forget
+  res.json({ success: true });
+});
+
+// Step 2: return QR instantly if ready, 202 if not yet
+app.get('/vendors/:id/qr-image', async (req, res) => {
+  const qr = getQR(req.params.id);
+  if (qr) {
+    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`;
+    return res.redirect(qrImageUrl);
+  }
+  res.status(202).json({ status: 'not_ready' });
+});
+
+// Legacy full-page QR (kept for fallback)
 app.get('/vendors/:id/qr', async (req, res) => {
   const vendorId = req.params.id;
   const { data: vendor, error } = await supabase.from('vendors').select('*').eq('id', vendorId).single();
   if (error || !vendor) return res.status(404).send('Vendor not found');
   if (!vendor.active) return res.status(403).send('Vendor not approved yet');
-
   await connectVendor(vendorId, vendor.business_name);
-
   const checkQR = (attempts = 0) => {
     const qr = getQR(vendorId);
     if (qr) {
@@ -137,40 +156,8 @@ app.get('/vendors/:id/qr', async (req, res) => {
         </body></html>
       `);
     }
-    if (attempts < 15) {
-      setTimeout(() => checkQR(attempts + 1), 1000);
-    } else {
-      res.send(`
-        <html>
-        <head><meta http-equiv="refresh" content="5"></head>
-        <body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#000;color:white;font-family:sans-serif">
-          <p>Connecting... please wait</p>
-        </body></html>
-      `);
-    }
-  };
-  setTimeout(() => checkQR(), 1000);
-});
-
-app.get('/vendors/:id/qr-image', async (req, res) => {
-  const vendorId = req.params.id;
-  const { data: vendor, error } = await supabase.from('vendors').select('*').eq('id', vendorId).single();
-  if (error || !vendor) return res.status(404).send('Not found');
-  if (!vendor.active) return res.status(403).send('Not approved');
-
-  await connectVendor(vendorId, vendor.business_name);
-
-  const checkQR = (attempts = 0) => {
-    const qr = getQR(vendorId);
-    if (qr) {
-      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`;
-      return res.redirect(qrImageUrl);
-    }
-    if (attempts < 15) {
-      setTimeout(() => checkQR(attempts + 1), 1000);
-    } else {
-      res.status(504).send('QR not ready');
-    }
+    if (attempts < 15) setTimeout(() => checkQR(attempts + 1), 1000);
+    else res.send(`<html><head><meta http-equiv="refresh" content="5"></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#000;color:white"><p>Connecting... please wait</p></body></html>`);
   };
   setTimeout(() => checkQR(), 1000);
 });
@@ -180,16 +167,20 @@ app.get('/vendors/:id/status', async (req, res) => {
   res.json(vendor || { whatsapp_connected: false });
 });
 
+app.post('/vendors/:id/disconnect', async (req, res) => {
+  const { error } = await supabase.from('vendors').update({ whatsapp_connected: false }).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
 // ─── LEGACY SINGLE QR ────────────────────────────────────────────────────────
 
 app.get('/qr', (req, res) => {
   const qr = getQR('owner');
   if (qr) {
-    res.send(`
-      <html><body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#000">
+    res.send(`<html><body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#000">
       <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}" />
-      </body></html>
-    `);
+      </body></html>`);
   } else {
     res.send('QR not ready yet — wait 10 seconds and refresh');
   }
@@ -197,15 +188,6 @@ app.get('/qr', (req, res) => {
 
 app.use('/webhook', require('./webhook'));
 app.get('/', (req, res) => res.json({ message: 'Nexua OrderFlow server running!' }));
-
-app.post('/vendors/:id/disconnect', async (req, res) => {
-  const { error } = await supabase
-    .from('vendors')
-    .update({ whatsapp_connected: false })
-    .eq('id', req.params.id);
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
-});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

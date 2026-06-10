@@ -137,6 +137,8 @@ textarea{resize:vertical;min-height:70px;}
 .login-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:24px;color:var(--accent);margin-bottom:4px;}
 .login-sub{font-size:13px;color:var(--muted);margin-bottom:28px;}
 .login-error{background:var(--red-dim);border:1px solid var(--red);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:16px;display:none;}
+
+/* Bot Training */
 .training-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:20px;}
 .training-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:6px;}
 .training-sub{font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5;}
@@ -151,6 +153,7 @@ textarea{resize:vertical;min-height:70px;}
 </head>
 <body>
 
+<!-- Login Gate -->
 <div id="login-gate">
   <div class="login-box">
     <div class="login-logo">OrderFlow</div>
@@ -244,22 +247,49 @@ textarea{resize:vertical;min-height:70px;}
     <div class="content" id="page-training" style="display:none;">
       <div class="training-card">
         <div class="training-title">🧠 Train Your Bot</div>
-        <div class="training-sub">Tell your bot how to behave — your hours, policies, delivery info, or anything customers frequently ask.</div>
+        <div class="training-sub">Tell your bot how to behave — your hours, policies, delivery info, or anything customers frequently ask. The bot will follow these rules in every conversation.</div>
+
         <div class="examples-grid">
-          <div class="example-chip" onclick="addExample('I am unavailable every day from 2pm to 5pm. Let customers know during this time.')"><strong>⏰ Availability</strong>"I'm unavailable from 2pm–5pm daily"</div>
-          <div class="example-chip" onclick="addExample('Delivery takes 2-3 business days. Delivery fee is charged based on location.')"><strong>🚚 Delivery</strong>"Delivery takes 2-3 business days"</div>
-          <div class="example-chip" onclick="addExample('We do not accept returns or refunds after 24 hours of delivery.')"><strong>↩️ Returns</strong>"No refunds after 24 hours"</div>
-          <div class="example-chip" onclick="addExample('Minimum order amount is 5000. Orders below this cannot be processed.')"><strong>💰 Minimum Order</strong>"Minimum order amount applies"</div>
-          <div class="example-chip" onclick="addExample('We accept bank transfer and cash on delivery as payment methods.')"><strong>💳 Payment</strong>"Bank transfer & cash on delivery"</div>
-          <div class="example-chip" onclick="addExample('Always ask for the customer\'s full name, address, and phone number before confirming any order.')"><strong>📋 Order Details</strong>"Always collect name & address"</div>
+          <div class="example-chip" onclick="addExample('I am unavailable every day from 2pm to 5pm. Let customers know during this time.')">
+            <strong>⏰ Availability</strong>
+            "I'm unavailable from 2pm–5pm daily"
+          </div>
+          <div class="example-chip" onclick="addExample('Delivery takes 2-3 business days. Delivery fee is charged based on location.')">
+            <strong>🚚 Delivery</strong>
+            "Delivery takes 2-3 business days"
+          </div>
+          <div class="example-chip" onclick="addExample('We do not accept returns or refunds after 24 hours of delivery.')">
+            <strong>↩️ Returns</strong>
+            "No refunds after 24 hours"
+          </div>
+          <div class="example-chip" onclick="addExample('Minimum order amount is 5000. Orders below this cannot be processed.')">
+            <strong>💰 Minimum Order</strong>
+            "Minimum order amount applies"
+          </div>
+          <div class="example-chip" onclick="addExample('We accept bank transfer and cash on delivery as payment methods.')">
+            <strong>💳 Payment</strong>
+            "Bank transfer & cash on delivery"
+          </div>
+          <div class="example-chip" onclick="addExample('Always ask for the customer\'s full name, address, and phone number before confirming any order.')">
+            <strong>📋 Order Details</strong>
+            "Always collect name & address"
+          </div>
         </div>
+
         <label style="margin-bottom:8px;">Your Bot Instructions</label>
-        <textarea class="training-textarea" id="bot-instructions" placeholder="Examples:&#10;• I am unavailable every day from 2pm to 5pm.&#10;• Delivery takes 2-3 business days within the city.&#10;• We do not accept returns after 24 hours.&#10;• Minimum order is 5,000.&#10;• Payment is via bank transfer only."></textarea>
+        <textarea class="training-textarea" id="bot-instructions" placeholder="Examples:
+• I am unavailable every day from 2pm to 5pm. Let customers know.
+• Delivery takes 2-3 business days within the city.
+• We do not accept returns after 24 hours.
+• Minimum order is 5,000. Always confirm before proceeding.
+• Payment is via bank transfer only — share account details when order is confirmed."></textarea>
+
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;">
           <div style="font-size:12px;color:var(--muted);">Changes take effect on the next customer message</div>
           <button class="btn btn-primary" onclick="saveInstructions()">Save Instructions</button>
         </div>
       </div>
+
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;">
         <div class="section-title" style="margin-bottom:12px;">💡 Tips for better bot training</div>
         <div class="qr-step"><div class="qr-num">1</div><div>Be specific — "I'm unavailable from 2pm to 5pm WAT" is better than "I'm sometimes busy"</div></div>
@@ -327,22 +357,27 @@ const API = 'https://rady-bot.onrender.com';
 let products = [], selectedEmoji = '👕', editingId = null;
 let currentCat = 'all', searchTerm = '';
 let vendor = null;
-let qrPolling = null, statusPoller = null;
 
 const CURRENCY_MAP = {
-  'Nigeria':'₦','Germany':'€','UK':'£','US':'$',
-  'Ghana':'GH₵','Kenya':'KSh','South Africa':'R','Other':''
+  'Nigeria': '₦', 'Germany': '€', 'UK': '£', 'US': '$',
+  'Ghana': 'GH₵', 'Kenya': 'KSh', 'South Africa': 'R', 'Other': ''
 };
-function getCurrency() { return CURRENCY_MAP[vendor?.country] || '₦'; }
+
+function getCurrency() {
+  return CURRENCY_MAP[vendor?.country] || '₦';
+}
 
 // ── AUTH ──────────────────────────────────────────────────────────────────────
 
 async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
-  const pass  = document.getElementById('login-pass').value.trim();
+  const pass = document.getElementById('login-pass').value.trim();
   if (!email || !pass) return showLoginError('Enter your email and password');
   try {
-    const res  = await fetch(`${API}/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ email, password: pass }) });
+    const res = await fetch(`${API}/login`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ email, password: pass })
+    });
     const data = await res.json();
     if (!data.success) return showLoginError(data.error);
     vendor = data.vendor;
@@ -356,16 +391,22 @@ function showLoginError(msg) {
   el.textContent = msg; el.style.display = 'block';
 }
 
-function logout() { localStorage.removeItem('rady_vendor'); location.reload(); }
+function logout() {
+  localStorage.removeItem('rady_vendor');
+  location.reload();
+}
 
 function initDashboard() {
   document.getElementById('login-gate').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
-  document.getElementById('sidebar-avatar').textContent = vendor.business_name?.charAt(0).toUpperCase() || 'V';
+  const initials = vendor.business_name?.charAt(0).toUpperCase() || 'V';
+  document.getElementById('sidebar-avatar').textContent = initials;
   document.getElementById('sidebar-name').textContent = vendor.business_name;
   document.getElementById('currency-label').textContent = getCurrency();
   document.getElementById('stat-revenue').textContent = getCurrency() + '0';
-  if (vendor.bot_instructions) document.getElementById('bot-instructions').value = vendor.bot_instructions;
+  if (vendor.bot_instructions) {
+    document.getElementById('bot-instructions').value = vendor.bot_instructions;
+  }
   loadProducts();
   checkWAStatus();
 }
@@ -399,7 +440,11 @@ function addExample(text) {
 async function saveInstructions() {
   const instructions = document.getElementById('bot-instructions').value.trim();
   try {
-    const res  = await fetch(`${API}/vendors/${vendor.id}/bot-instructions`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ bot_instructions: instructions }) });
+    const res = await fetch(`${API}/vendors/${vendor.id}/bot-instructions`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bot_instructions: instructions })
+    });
     const data = await res.json();
     if (data.success) {
       vendor.bot_instructions = instructions;
@@ -412,11 +457,12 @@ async function saveInstructions() {
 // ── WHATSAPP ──────────────────────────────────────────────────────────────────
 
 let waConnected = false;
+let qrPolling = null, statusPoller = null;
 
 async function checkWAStatus() {
   if (!vendor) return;
   try {
-    const res  = await fetch(`${API}/vendors/${vendor.id}/status`);
+    const res = await fetch(`${API}/vendors/${vendor.id}/status`);
     const data = await res.json();
     waConnected = data.whatsapp_connected;
     renderWABanner();
@@ -424,55 +470,64 @@ async function checkWAStatus() {
 }
 
 function renderWABanner() {
-  const banner     = document.getElementById('wa-banner');
-  const title      = document.getElementById('wa-title');
-  const sub        = document.getElementById('wa-sub');
+  const banner = document.getElementById('wa-banner');
+  const title = document.getElementById('wa-title');
+  const sub = document.getElementById('wa-sub');
   const statusArea = document.getElementById('wa-status-area');
 
   if (waConnected) {
     banner.className = 'wa-banner connected';
     title.textContent = 'WhatsApp Bot — Connected';
-    sub.textContent   = `Your bot is live on ${vendor.business_name}`;
+    sub.textContent = `Your bot is live on ${vendor.business_name}`;
     statusArea.innerHTML = `<div class="wa-status-connected"><div class="wa-dot"></div> Live & Active</div>`;
     document.getElementById('qr-section').classList.remove('open');
-    if (qrPolling)    { clearInterval(qrPolling);    qrPolling    = null; }
+    if (qrPolling) { clearInterval(qrPolling); qrPolling = null; }
     if (statusPoller) { clearInterval(statusPoller); statusPoller = null; }
   } else {
     banner.className = 'wa-banner disconnected';
     title.textContent = 'WhatsApp Bot — Not Connected';
-    sub.textContent   = 'Connect your WhatsApp number to go live';
+    sub.textContent = 'Connect your WhatsApp number to go live';
     statusArea.innerHTML = `<button class="btn btn-primary" onclick="startQR()">📱 Connect WhatsApp</button>`;
   }
 }
 
 async function startQR() {
-  // Stop any existing pollers
   if (qrPolling)    { clearInterval(qrPolling);    qrPolling    = null; }
   if (statusPoller) { clearInterval(statusPoller); statusPoller = null; }
 
   const qrSection = document.getElementById('qr-section');
   const qrContent = document.getElementById('qr-content');
   qrSection.classList.add('open');
-  qrContent.innerHTML = '<div class="qr-loading">⏳ Connecting to WhatsApp...<br><small style="color:var(--muted);margin-top:8px;display:block">Generating your QR code, please wait</small></div>';
 
-  // Step 1: trigger connection — returns instantly, no 504 risk
-  try {
-    await fetch(`${API}/vendors/${vendor.id}/connect`, { method: 'POST' });
-  } catch(e) {}
+  const steps = [
+    '⏳ Waking up server...',
+    '🔌 Connecting to WhatsApp...',
+    '📡 Setting up your bot...',
+    '🔑 Generating QR code...',
+    '⏳ Almost ready, hang tight...'
+  ];
+  let stepIndex = 0;
+  function showStep() {
+    if (stepIndex < steps.length) {
+      qrContent.innerHTML = `<div class="qr-loading">${steps[stepIndex]}<br><small style="color:var(--muted);margin-top:8px;display:block">This takes about 10 seconds</small></div>`;
+      stepIndex++;
+    }
+  }
+  showStep();
+  const stepTimer = setInterval(showStep, 3000);
 
-  let qrShown    = false;
-  let qrAttempts = 0;
+  try { await fetch(`${API}/vendors/${vendor.id}/connect`, { method: 'POST' }); } catch(e) {}
 
-  // Step 2: poll /qr-image every 2s — server returns JSON {status, url}, never redirects
+  let qrShown = false, qrAttempts = 0;
+
   qrPolling = setInterval(async () => {
     qrAttempts++;
     try {
       const res  = await fetch(`${API}/vendors/${vendor.id}/qr-image`);
       const data = await res.json();
-
       if (data.status === 'ready' && data.url && !qrShown) {
         qrShown = true;
-        // Set img src from the JSON url — browser never hits qr-image again
+        clearInterval(stepTimer);
         qrContent.innerHTML = `
           <div class="qr-frame">
             <div class="qr-box">
@@ -483,22 +538,17 @@ async function startQR() {
               <div class="qr-step"><div class="qr-num">2</div><div>Tap <strong>⋮ → Linked Devices → Link a Device</strong></div></div>
               <div class="qr-step"><div class="qr-num">3</div><div>Point your camera at the QR code</div></div>
               <div class="qr-step"><div class="qr-num">4</div><div>Your bot goes live instantly! 🎉</div></div>
-              <p style="font-size:11px;color:var(--muted);margin-top:12px;">QR refreshes automatically. Keep this page open.</p>
+              <p style="font-size:11px;color:var(--muted);margin-top:12px;">QR expires in 60 seconds. Keep this page open.</p>
             </div>
           </div>`;
       }
-      // data.status === 'not_ready' → just keep polling
     } catch(e) {}
-
     if (qrAttempts > 60) {
-      clearInterval(qrPolling); qrPolling = null;
-      if (!qrShown) {
-        qrContent.innerHTML = '<div class="qr-loading">⚠️ Timed out.<br><button class="btn btn-ghost" onclick="startQR()" style="margin-top:12px">Try again</button></div>';
-      }
+      clearInterval(qrPolling); clearInterval(stepTimer); qrPolling = null;
+      if (!qrShown) qrContent.innerHTML = '<div class="qr-loading">⚠️ Timed out.<br><button class="btn btn-ghost" onclick="startQR()" style="margin-top:12px">Try again</button></div>';
     }
   }, 2000);
 
-  // Step 3: poll /status every 3s to detect successful scan
   statusPoller = setInterval(async () => {
     try {
       const res  = await fetch(`${API}/vendors/${vendor.id}/status`);
@@ -507,6 +557,7 @@ async function startQR() {
         waConnected = true;
         vendor.whatsapp_connected = true;
         localStorage.setItem('rady_vendor', JSON.stringify(vendor));
+        clearInterval(stepTimer);
         renderWABanner();
         showToast('✅ WhatsApp connected!');
       }
@@ -520,7 +571,7 @@ async function loadProducts() {
   if (!vendor) return;
   try {
     const res = await fetch(`${API}/products?vendor_id=${vendor.id}`);
-    products  = await res.json();
+    products = await res.json();
     renderProducts();
   } catch(e) {
     document.getElementById('products-list').innerHTML = '<div class="loading">⚠️ Cannot reach server.</div>';
@@ -528,38 +579,48 @@ async function loadProducts() {
 }
 
 function renderProducts() {
-  const list     = document.getElementById('products-list');
+  const list = document.getElementById('products-list');
   const currency = getCurrency();
-  const catEmoji = {'Hoodies':'🧥','Caps':'🧢','T-Shirts':'👕','Accessories':'👜','Joggers':'👖','Jackets':'🧣','Food':'🍛','Drinks':'🥤','Electronics':'📱','Other':'📦'};
-  const existingCats = [...new Set(products.map(p => p.category).filter(Boolean))];
-  const pillsEl  = document.getElementById('filter-pills');
-  pillsEl.innerHTML = `<button class="pill ${currentCat==='all'?'active':''}" onclick="filterCat('all',this)">All</button>` +
-    existingCats.map(cat => `<button class="pill ${currentCat===cat?'active':''}" onclick="filterCat('${cat}',this)">${catEmoji[cat]||'📦'} ${cat}</button>`).join('');
 
-  const filtered = products.filter(p => {
-    const matchCat    = currentCat === 'all' || p.category === currentCat;
+  const categoryEmojis = {
+    'Hoodies':'🧥','Caps':'🧢','T-Shirts':'👕','Accessories':'👜',
+    'Joggers':'👖','Jackets':'🧣','Food':'🍛','Drinks':'🥤',
+    'Electronics':'📱','Other':'📦'
+  };
+  const existingCats = [...new Set(products.map(p => p.category).filter(Boolean))];
+  const pillsEl = document.getElementById('filter-pills');
+  pillsEl.innerHTML = `<button class="pill ${currentCat==='all'?'active':''}" onclick="filterCat('all',this)">All</button>` +
+    existingCats.map(cat =>
+      `<button class="pill ${currentCat===cat?'active':''}" onclick="filterCat('${cat}',this)">${categoryEmojis[cat]||'📦'} ${cat}</button>`
+    ).join('');
+
+  let filtered = products.filter(p => {
+    const matchCat = currentCat === 'all' || p.category === currentCat;
     const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
     return matchCat && matchSearch;
   });
 
-  list.innerHTML = filtered.length ? filtered.map(p => `
-    <div class="product-row">
-      <div class="product-info">
-        <div class="product-emoji">${p.emoji || '📦'}</div>
-        <div><div class="product-name">${p.name}</div><div class="product-category">${p.description || ''}</div></div>
-      </div>
-      <div class="price">${currency}${Number(p.price).toLocaleString()}</div>
-      <div class="cell-small">${p.category}</div>
-      <div class="cell-small">${p.sizes || '—'}</div>
-      <div><span class="badge ${p.active?'badge-active':'badge-inactive'}">${p.active?'Active':'Hidden'}</span></div>
-      <div class="actions">
-        <button class="icon-btn" onclick="editProduct(${p.id})">✏️</button>
-        <button class="icon-btn delete" onclick="deleteProduct(${p.id})">🗑</button>
-      </div>
-    </div>`).join('')
-  : '<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">No products yet</div><div>Click + Add Product to get started</div></div>';
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">No products yet</div><div>Click + Add Product to get started</div></div>';
+  } else {
+    list.innerHTML = filtered.map(p => `
+      <div class="product-row">
+        <div class="product-info">
+          <div class="product-emoji">${p.emoji || '📦'}</div>
+          <div><div class="product-name">${p.name}</div><div class="product-category">${p.description || ''}</div></div>
+        </div>
+        <div class="price">${currency}${Number(p.price).toLocaleString()}</div>
+        <div class="cell-small">${p.category}</div>
+        <div class="cell-small">${p.sizes || '—'}</div>
+        <div><span class="badge ${p.active ? 'badge-active':'badge-inactive'}">${p.active ? 'Active':'Hidden'}</span></div>
+        <div class="actions">
+          <button class="icon-btn" onclick="editProduct(${p.id})">✏️</button>
+          <button class="icon-btn delete" onclick="deleteProduct(${p.id})">🗑</button>
+        </div>
+      </div>`).join('');
+  }
 
-  document.getElementById('stat-total').textContent  = products.length;
+  document.getElementById('stat-total').textContent = products.length;
   document.getElementById('stat-active').textContent = products.filter(p => p.active).length;
 }
 
@@ -569,20 +630,21 @@ function filterCat(cat, el) {
   el.classList.add('active');
   renderProducts();
 }
+
 function filterProducts(val) { searchTerm = val; renderProducts(); }
 
 async function saveProduct() {
-  const name  = document.getElementById('f-name').value.trim();
+  const name = document.getElementById('f-name').value.trim();
   const price = parseInt(document.getElementById('f-price').value);
   if (!name || !price) { showToast('⚠️ Fill in name and price'); return; }
   const product = {
     name, price,
-    category:  document.getElementById('f-category').value,
-    desc:      document.getElementById('f-desc').value.trim(),
-    emoji:     selectedEmoji,
-    active:    document.getElementById('toggle-active').classList.contains('on'),
-    sizes:     document.getElementById('f-sizes').value.trim(),
-    colors:    document.getElementById('f-colors').value.trim(),
+    category: document.getElementById('f-category').value,
+    desc: document.getElementById('f-desc').value.trim(),
+    emoji: selectedEmoji,
+    active: document.getElementById('toggle-active').classList.contains('on'),
+    sizes: document.getElementById('f-sizes').value.trim(),
+    colors: document.getElementById('f-colors').value.trim(),
     vendor_id: vendor.id
   };
   try {
@@ -607,13 +669,13 @@ async function deleteProduct(id) {
 function editProduct(id) {
   const p = products.find(x => x.id === id);
   editingId = id;
-  document.getElementById('modal-title').textContent  = 'Edit Product';
-  document.getElementById('f-name').value             = p.name;
-  document.getElementById('f-price').value            = p.price;
-  document.getElementById('f-category').value         = p.category;
-  document.getElementById('f-desc').value             = p.description || '';
-  document.getElementById('f-sizes').value            = p.sizes || '';
-  document.getElementById('f-colors').value           = p.colors || '';
+  document.getElementById('modal-title').textContent = 'Edit Product';
+  document.getElementById('f-name').value = p.name;
+  document.getElementById('f-price').value = p.price;
+  document.getElementById('f-category').value = p.category;
+  document.getElementById('f-desc').value = p.description || '';
+  document.getElementById('f-sizes').value = p.sizes || '';
+  document.getElementById('f-colors').value = p.colors || '';
   selectedEmoji = p.emoji || '📦';
   p.active ? document.getElementById('toggle-active').classList.add('on') : document.getElementById('toggle-active').classList.remove('on');
   renderEmojiPicker();

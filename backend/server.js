@@ -12,7 +12,8 @@ app.use(express.json());
 
 app.get('/products', async (req, res) => {
   const { vendor_id } = req.query;
-  let query = supabase.from('products').select('*').order('id', { ascending: true });  if (vendor_id) query = query.eq('vendor_id', vendor_id);
+  let query = supabase.from('products').select('*').order('id', { ascending: true });
+  if (vendor_id) query = query.eq('vendor_id', vendor_id);
   const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
@@ -57,31 +58,39 @@ app.delete('/products/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── AUTH ─────────────────────────────────────────────────────────────────
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
 
 app.post('/signup', async (req, res) => {
   const { name, business_name, email, whatsapp_number, business_type, about, password, country } = req.body;
   const { data: existing } = await supabase.from('vendors').select('id').eq('email', email).single();
   if (existing) return res.json({ success: false, error: 'Email already registered' });
-  const { data, error } = await supabase.from('vendors').insert([{ name, business_name, email, whatsapp_number, business_type, about, password, country }]).select();
-  if (error) return res.status(500).json({ error: error.message });
+  const { data, error } = await supabase
+    .from('vendors')
+    .insert([{ name, business_name, email, whatsapp_number, business_type, about, password, active: false, country: country || 'Nigeria' }])
+    .select();
+  if (error) return res.json({ success: false, error: error.message });
+  console.log(`New signup: ${business_name} (${country || 'Nigeria'}) — ${email}`);
   res.json({ success: true });
 });
 
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
-  const { data: vendor } = await supabase.from('vendors').select('*').eq('email', email).eq('password', password).single();
+  const { data: vendor, error } = await supabase
+    .from('vendors').select('*').eq('email', email).eq('password', password).single();
   if (error || !vendor) return res.json({ success: false, error: 'Invalid email or password' });
-  if (!vendor.active) return res.status(403).json({ error: 'Your account is pending approval. We will notify you within 48 hours.' });
+  if (!vendor.active) return res.json({ success: false, error: 'Your account is pending approval. We will notify you within 48 hours.' });
   res.json({ success: true, vendor: {
     id: vendor.id,
     name: vendor.name,
     business_name: vendor.business_name,
     email: vendor.email,
     whatsapp_connected: vendor.whatsapp_connected,
-    country: vendor.country || 'Nigeria'
+    country: vendor.country || 'Nigeria',
+    bot_instructions: vendor.bot_instructions || ''
   }});
 });
+
+// ─── BOT TRAINING ─────────────────────────────────────────────────────────────
 
 app.put('/vendors/:id/bot-instructions', async (req, res) => {
   const { bot_instructions } = req.body;
@@ -90,7 +99,7 @@ app.put('/vendors/:id/bot-instructions', async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── ADMIN ─────────────────────────────────────────────────────────────────
+// ─── ADMIN ────────────────────────────────────────────────────────────────────
 
 app.get('/admin/vendors', async (req, res) => {
   const { data, error } = await supabase.from('vendors').select('*').order('created_at', { ascending: false });
@@ -104,18 +113,19 @@ app.put('/admin/vendors/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── WHATSAPP ─────────────────────────────────────────────────────────────
+// ─── WHATSAPP ─────────────────────────────────────────────────────────────────
 
+// Step 1: trigger connection — returns instantly
 app.post('/vendors/:id/connect', async (req, res) => {
   const vendorId = req.params.id;
-  const { data: vendor } = await supabase.from('vendors').select('*').eq('id', vendorId).single();
+  const { data: vendor, error } = await supabase.from('vendors').select('*').eq('id', vendorId).single();
   if (error || !vendor) return res.status(404).json({ error: 'Vendor not found' });
   if (!vendor.active) return res.status(403).json({ error: 'Vendor not approved' });
   connectVendor(vendorId, vendor.business_name); // fire and forget
   res.json({ success: true });
 });
 
-// Step 2: return QR URL as JSON — never redirects, never times out
+// Step 2: poll this for QR — returns JSON, never redirects, never times out
 app.get('/vendors/:id/qr-image', (req, res) => {
   const qr = getQR(req.params.id);
   if (qr) {
@@ -138,7 +148,7 @@ app.post('/vendors/:id/disconnect', async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── LEGACY SINGLE QR ────────────────────────────────────────────────────
+// ─── LEGACY QR ────────────────────────────────────────────────────────────────
 
 app.get('/qr', (req, res) => {
   const qr = getQR('owner');
@@ -157,5 +167,4 @@ app.get('/', (req, res) => res.json({ message: 'Nexua OrderFlow server running!'
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Nexua OrderFlow server running on port ${PORT}`);
-  // connectVendor('owner', 'Nexua Owner'); // disabled — vendors connect via dashboard
 });

@@ -203,7 +203,7 @@ textarea{resize:vertical;min-height:70px;}
       <div class="stats">
         <div class="stat-card green"><div class="stat-label">Total Products</div><div class="stat-value" id="stat-total">0</div><div class="stat-change">Your catalog</div></div>
         <div class="stat-card orange"><div class="stat-label">Active</div><div class="stat-value" id="stat-active">0</div><div class="stat-change">Visible to customers</div></div>
-        <div class="stat-card blue"><div class="stat-label">Orders Today</div><div class="stat-value">0</div><div class="stat-change">Via WhatsApp</div></div>
+        <div class="stat-card blue"><div class="stat-label">Orders Today</div><div class="stat-value" id="stat-orders">0</div><div class="stat-change">Via WhatsApp</div></div>
         <div class="stat-card purple"><div class="stat-label">Revenue Today</div><div class="stat-value" id="stat-revenue">0</div><div class="stat-change">Keep pushing!</div></div>
       </div>
       <div class="section-header">
@@ -300,7 +300,15 @@ textarea{resize:vertical;min-height:70px;}
 
     <!-- ORDERS PAGE -->
     <div class="content" id="page-orders" style="display:none;">
-      <div class="empty-state"><div class="empty-icon">🛒</div><div class="empty-title">No orders yet</div><div>Orders will appear here once customers start buying</div></div>
+      <div class="section-header" style="margin-bottom:20px;">
+        <div class="section-title">Orders</div>
+      </div>
+      <div class="products-table">
+        <div class="table-head" style="grid-template-columns:1.5fr 1fr 1.5fr 1fr 1fr 100px;">
+          <div>Customer</div><div>Items</div><div>Address</div><div>Total</div><div>Date</div><div>Status</div>
+        </div>
+        <div id="orders-list"><div class="loading">Loading orders...</div></div>
+      </div>
     </div>
 
     <!-- ANALYTICS PAGE -->
@@ -408,6 +416,7 @@ function initDashboard() {
     document.getElementById('bot-instructions').value = vendor.bot_instructions;
   }
   loadProducts();
+  loadStats();
   checkWAStatus();
 }
 
@@ -427,6 +436,7 @@ function showPage(page, el) {
   document.getElementById('page-title').textContent = titles[page];
   document.getElementById('add-btn').style.display = page === 'products' ? 'flex' : 'none';
   if (page === 'whatsapp') checkWAStatus();
+  if (page === 'orders') { loadOrders(); loadStats(); }
 }
 
 // ── BOT TRAINING ──────────────────────────────────────────────────────────────
@@ -563,6 +573,66 @@ async function startQR() {
       }
     } catch(e) {}
   }, 3000);
+}
+
+// ── STATS & ORDERS ────────────────────────────────────────────────────────────
+
+async function loadStats() {
+  if (!vendor) return;
+  try {
+    const res  = await fetch(`${API}/orders/stats?vendor_id=${vendor.id}`);
+    const data = await res.json();
+    document.getElementById('stat-orders').textContent = data.orders_today || 0;
+    document.getElementById('stat-revenue').textContent = getCurrency() + (data.revenue_today || 0).toLocaleString();
+  } catch(e) {}
+}
+
+async function loadOrders() {
+  if (!vendor) return;
+  try {
+    const res    = await fetch(`${API}/orders?vendor_id=${vendor.id}`);
+    const orders = await res.json();
+    const list   = document.getElementById('orders-list');
+
+    if (!orders.length) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-icon">🛒</div><div class="empty-title">No orders yet</div><div>Orders will appear here once customers start buying via WhatsApp</div></div>';
+      return;
+    }
+
+    const currency = getCurrency();
+    list.innerHTML = orders.map(o => `
+      <div class="product-row" style="grid-template-columns:1.5fr 1fr 1.5fr 1fr 1fr 100px;">
+        <div>
+          <div class="product-name">${o.customer_name || 'Unknown'}</div>
+          <div class="product-category">${o.customer_phone || ''}</div>
+        </div>
+        <div class="cell-small">${o.items || '—'}</div>
+        <div class="cell-small">${o.delivery_address || '—'}</div>
+        <div class="price">${currency}${Number(o.total_price || 0).toLocaleString()}</div>
+        <div class="cell-small">${new Date(o.created_at).toLocaleDateString()}</div>
+        <div>
+          <select onchange="updateOrderStatus(${o.id}, this.value)" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:11px;cursor:pointer;">
+            <option value="pending"   ${o.status==='pending'   ?'selected':''}>Pending</option>
+            <option value="confirmed" ${o.status==='confirmed' ?'selected':''}>Confirmed</option>
+            <option value="delivered" ${o.status==='delivered' ?'selected':''}>Delivered</option>
+            <option value="cancelled" ${o.status==='cancelled' ?'selected':''}>Cancelled</option>
+          </select>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('orders-list').innerHTML = '<div class="loading">⚠️ Cannot reach server.</div>';
+  }
+}
+
+async function updateOrderStatus(id, status) {
+  try {
+    await fetch(`${API}/orders/${id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    showToast('✓ Order status updated');
+  } catch(e) { showToast('⚠️ Could not update status.'); }
 }
 
 // ── PRODUCTS ──────────────────────────────────────────────────────────────────

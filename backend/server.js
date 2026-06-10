@@ -157,5 +157,5 @@ app.get('/', (req, res) => res.json({ message: 'Nexua OrderFlow server running!'
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Nexua OrderFlow server running on port ${PORT}`);
-  connectVendor('owner', 'Nexua Owner');
+  // connectVendor('owner', 'Nexua Owner'); // disabled — vendors connect via dashboard
 });

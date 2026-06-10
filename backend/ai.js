@@ -74,18 +74,48 @@ async function generateReply(history, products, vendorName = 'our store', countr
 
   const customRules  = botInstructions ? `\nSpecial business rules you must follow:\n${botInstructions}\n` : '';
   const systemPrompt = SYSTEM_PROMPT(vendorName, currency, tone, catalog, customRules);
-  const messages     = history.map(h => ({ role: h.role, content: h.content }));
 
-  if (!messages.length || messages[0].role !== 'user') return '';
+  // Ensure history is valid — must start with user message
+  let messages = history.map(h => ({ role: h.role, content: h.content }));
+
+  // Filter out any empty content
+  messages = messages.filter(m => m.content && m.content.trim().length > 0);
+
+  // Must start with user role
+  while (messages.length > 0 && messages[0].role !== 'user') {
+    messages.shift();
+  }
+
+  if (!messages.length) {
+    console.error('[AI] generateReply called with empty or invalid history');
+    return '';
+  }
+
+  // Ensure alternating roles (Claude API requirement)
+  const fixed = [messages[0]];
+  for (let i = 1; i < messages.length; i++) {
+    if (messages[i].role !== fixed[fixed.length - 1].role) {
+      fixed.push(messages[i]);
+    } else {
+      // Merge consecutive same-role messages
+      fixed[fixed.length - 1].content += '\n' + messages[i].content;
+    }
+  }
+
+  console.log(`[AI] Sending ${fixed.length} messages to Claude`);
 
   const response = await client.messages.create({
     model:      'claude-sonnet-4-6',
     max_tokens: 500,
     system:     systemPrompt,
-    messages
+    messages:   fixed
   });
 
-  return response.content[0].text;
+  const text = response.content[0]?.text || '';
+  if (!text) {
+    console.error('[AI] Claude returned empty response. Stop reason:', response.stop_reason);
+  }
+  return text;
 }
 
 // Extract order data
@@ -105,7 +135,7 @@ function extractHandoff(reply) {
   return reply.includes('HANDOFF_REQUESTED');
 }
 
-// Strip ORDER_CONFIRMED and HANDOFF_REQUESTED tags, keep everything else
+// Strip ORDER_CONFIRMED and HANDOFF_REQUESTED tags
 function cleanReply(reply) {
   return reply
     .replace(/ORDER_CONFIRMED:\{[^}]+\}\n?/s, '')

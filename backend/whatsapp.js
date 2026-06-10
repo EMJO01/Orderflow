@@ -1,7 +1,6 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, DisconnectReason } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
-const path = require('path');
-const fs = require('fs');
+const { useSupabaseAuthState } = require('./auth-supabase');
 
 const connections = {};
 const qrCodes = {};
@@ -65,10 +64,8 @@ async function connectVendor(vendorId, vendorName) {
     return;
   }
 
-  const authFolder = path.join(__dirname, 'auth_info', String(vendorId));
-  if (!fs.existsSync(authFolder)) fs.mkdirSync(authFolder, { recursive: true });
-
-  const { state, saveCreds } = await useMultiFileAuthState(authFolder);
+  // ── Load session from Supabase (persists across deploys) ──────────────────
+  const { state, saveCreds } = await useSupabaseAuthState(vendorId);
 
   const sock = makeWASocket({
     auth: state,
@@ -141,18 +138,18 @@ async function connectVendor(vendorId, vendorName) {
       if (vendorId !== 'owner') query = query.eq('vendor_id', vendorId);
       const { data: products } = await query;
 
-      const country = vendor?.country || 'Nigeria';
-      const botInstructions = vendor?.bot_instructions || '';
+      const country        = vendor?.country        || 'Nigeria';
+      const botInstructions= vendor?.bot_instructions|| '';
 
       // 3. Add customer message to history
       addToHistory(vendorId, from, 'user', text);
 
       // 4. Generate reply with full history
-      const history = getHistory(vendorId, from);
+      const history  = getHistory(vendorId, from);
       const rawReply = await generateReply(history, products || [], vendorName, country, botInstructions);
 
       // 5. Check for order confirmation
-      const orderData = extractOrder(rawReply);
+      const orderData   = extractOrder(rawReply);
       const replyToSend = cleanReply(rawReply);
 
       // 6. Send cleaned reply to customer
@@ -161,38 +158,35 @@ async function connectVendor(vendorId, vendorName) {
         console.log(`[${vendorName}] Replied: ${replyToSend}`);
       }
 
-      // 7. Add cleaned reply to history
+      // 7. Add reply to history
       addToHistory(vendorId, from, 'assistant', replyToSend || rawReply);
 
       // 8. If order confirmed — save to Supabase and notify vendor
       if (orderData) {
         console.log(`[${vendorName}] Order detected:`, orderData);
 
-        // Save order to Supabase
         await supabase.from('orders').insert([{
-          vendor_id: vendorId === 'owner' ? null : parseInt(vendorId),
-          customer_phone: from.replace('@s.whatsapp.net', '').replace('@lid', ''),
-          customer_name: orderData.name || 'Unknown',
-          items: orderData.items || '',
-          total_price: orderData.total || 0,
+          vendor_id:        vendorId === 'owner' ? null : parseInt(vendorId),
+          customer_phone:   from.replace('@s.whatsapp.net', '').replace('@lid', ''),
+          customer_name:    orderData.name    || 'Unknown',
+          items:            orderData.items   || '',
+          total_price:      orderData.total   || 0,
           delivery_address: orderData.address || '',
-          status: 'pending'
+          status:           'pending'
         }]);
 
-        // Notify vendor on their WhatsApp number
         if (vendor?.whatsapp_number && connections[vendorId]?.isReady) {
           const vendorJid = vendor.whatsapp_number.replace(/\D/g, '') + '@s.whatsapp.net';
           const notification =
 `🛍️ *New Order Alert!*
 
-👤 Customer: ${orderData.name || 'Unknown'}
-📦 Items: ${orderData.items || 'N/A'}
-💰 Total: ${orderData.total || 0}
-📍 Address: ${orderData.address || 'N/A'}
+👤 Customer: ${orderData.name    || 'Unknown'}
+📦 Items: ${orderData.items      || 'N/A'}
+💰 Total: ${orderData.total      || 0}
+📍 Address: ${orderData.address  || 'N/A'}
 📞 Phone: ${from.replace('@s.whatsapp.net', '').replace('@lid', '')}
 
 Reply to the customer directly to confirm delivery details.`;
-
           try {
             await sock.sendMessage(vendorJid, { text: notification });
             console.log(`[${vendorName}] Vendor notified of new order`);

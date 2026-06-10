@@ -89,7 +89,6 @@ async function connectVendor(vendorId, vendorName) {
 
   connections[vendorId] = { sock, isReady: false };
 
-  // Save creds every time they update
   sock.ev.on('creds.update', async () => {
     console.log(`[Auth] creds.update fired for vendor ${vendorId} — saving...`);
     await saveCreds();
@@ -105,10 +104,7 @@ async function connectVendor(vendorId, vendorName) {
       console.log(`✅ ${vendorName} WhatsApp connected!`);
       connections[vendorId].isReady = true;
       qrCodes[vendorId] = null;
-
-      // Save session immediately on successful connection
       await saveCreds();
-
       if (vendorId !== 'owner') {
         const supabase = require('./db');
         await supabase.from('vendors').update({ whatsapp_connected: true }).eq('id', vendorId);
@@ -117,7 +113,7 @@ async function connectVendor(vendorId, vendorName) {
 
     if (connection === 'close') {
       connections[vendorId].isReady = false;
-      const statusCode    = new Boom(lastDisconnect?.error)?.output?.statusCode;
+      const statusCode      = new Boom(lastDisconnect?.error)?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
       console.log(`${vendorName} disconnected. Code: ${statusCode}. Reconnecting: ${shouldReconnect}`);
 
@@ -126,13 +122,11 @@ async function connectVendor(vendorId, vendorName) {
         await supabase.from('vendors').update({ whatsapp_connected: false }).eq('id', vendorId);
       }
 
-      // 515 = restart required after pairing — save BEFORE reconnecting
       if (statusCode === 515) {
         console.log(`[${vendorName}] Code 515 restart — saving session before reconnect`);
         await saveCreds();
       }
 
-      // Logged out — clear session so next connect starts fresh with new QR
       if (statusCode === DisconnectReason.loggedOut) {
         console.log(`[${vendorName}] Logged out — clearing saved session`);
         await clearSession(vendorId);
@@ -181,19 +175,23 @@ async function connectVendor(vendorId, vendorName) {
       const history  = getHistory(vendorId, from);
       const rawReply = await generateReply(history, products || [], vendorName, country, botInstructions);
 
+      console.log(`[${vendorName}] Raw reply: ${rawReply}`);
+
       const orderData   = extractOrder(rawReply);
-      const replyToSend = cleanReply(rawReply);
+      const cleanedText = cleanReply(rawReply);
 
-      if (replyToSend) {
-        await sock.sendMessage(from, { text: replyToSend });
-        console.log(`[${vendorName}] Replied: ${replyToSend}`);
-      }
+      // Always send something — fallback if cleanReply strips everything
+      const finalReply = cleanedText || '✅ Order confirmed! Our team will reach out to you shortly 🙌';
 
-      addToHistory(vendorId, from, 'assistant', replyToSend || rawReply);
+      await sock.sendMessage(from, { text: finalReply });
+      console.log(`[${vendorName}] Replied: ${finalReply}`);
+
+      addToHistory(vendorId, from, 'assistant', finalReply);
 
       if (orderData) {
         console.log(`[${vendorName}] Order detected:`, orderData);
-        await supabase.from('orders').insert([{
+
+        const { error: orderError } = await supabase.from('orders').insert([{
           vendor_id:        vendorId === 'owner' ? null : parseInt(vendorId),
           customer_phone:   from.replace('@s.whatsapp.net', '').replace('@lid', ''),
           customer_name:    orderData.name    || 'Unknown',
@@ -202,6 +200,12 @@ async function connectVendor(vendorId, vendorName) {
           delivery_address: orderData.address || '',
           status:           'pending'
         }]);
+
+        if (orderError) {
+          console.error(`[${vendorName}] Order insert error:`, orderError.message);
+        } else {
+          console.log(`[${vendorName}] Order saved to Supabase ✅`);
+        }
 
         if (vendor?.whatsapp_number && connections[vendorId]?.isReady) {
           const vendorJid = vendor.whatsapp_number.replace(/\D/g, '') + '@s.whatsapp.net';
@@ -227,7 +231,7 @@ Reply to the customer directly to confirm delivery details.`;
       scheduleReEngage(vendorId, from, sock, vendorName, products || [], country, botInstructions);
 
     } catch (err) {
-      console.error(`[${vendorName}] Reply error:`, err.message);
+      console.error(`[${vendorName}] Reply error:`, err.message, err.stack);
     }
   });
 }

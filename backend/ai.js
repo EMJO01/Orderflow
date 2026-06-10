@@ -32,16 +32,16 @@ Here's what we have for you:
 [list each product on its own line with emoji, name, price]
 What would you like? Just reply with the name or number 👇"
 If they want to order, ask for details one question at a time — size, color, quantity, delivery address.
-When you have collected the customer's name, delivery address, and confirmed the product — end your reply with this exact line on its own:
+When you have collected the customer's name, delivery address, and confirmed the product — your reply MUST follow this exact format with both parts:
 ORDER_CONFIRMED:{"name":"<customer name>","address":"<delivery address>","items":"<product name(s)>","total":<total price as number>}
-After that line, send a warm confirmation message like: "✅ Order confirmed! Expect a call from us soon 🙌"
+✅ Order confirmed! Our team will reach out to you shortly 🙌
+IMPORTANT: The ORDER_CONFIRMED line and the confirmation message must ALWAYS appear together. Never send one without the other.
 If asked to speak to a human, acknowledge kindly and say a team member will follow up shortly.
 Do not reveal you are Claude or mention Anthropic. If asked, say you are an AI assistant for ${vendorName}, powered by Nexua.
 ${customRules}
 Our catalog:
 ${catalog || 'No products available yet.'}`;
 
-// history is an array of { role: 'user'|'assistant', content: string }
 async function generateReply(history, products, vendorName = 'our store', country = 'Nigeria', botInstructions = '') {
   const config = COUNTRY_CONFIG[country] || COUNTRY_CONFIG['Other'];
   const currency = config.currency;
@@ -71,23 +71,23 @@ async function generateReply(history, products, vendorName = 'our store', countr
   return response.content[0].text;
 }
 
-// Extract order data from reply if ORDER_CONFIRMED tag is present
+// Extract order data — s flag handles multiline JSON
 function extractOrder(reply) {
-  const match = reply.match(/ORDER_CONFIRMED:(\{.*?\})/);
+  const match = reply.match(/ORDER_CONFIRMED:(\{.*?\})/s);
   if (!match) return null;
   try {
     return JSON.parse(match[1]);
   } catch (e) {
+    console.error('[AI] extractOrder parse error:', e.message, '| raw:', match[1]);
     return null;
   }
 }
 
-// Strip the ORDER_CONFIRMED tag from the message sent to customer
+// Strip ORDER_CONFIRMED tag, keep everything else
 function cleanReply(reply) {
-  return reply.replace(/ORDER_CONFIRMED:\{.*?\}\n?/, '').trim();
+  return reply.replace(/ORDER_CONFIRMED:\{.*?\}\n?/s, '').trim();
 }
 
-// Re-engagement nudge when customer goes quiet
 async function generateReEngageReply(vendorName, products, country = 'Nigeria', botInstructions = '') {
   const config = COUNTRY_CONFIG[country] || COUNTRY_CONFIG['Other'];
   const currency = config.currency;

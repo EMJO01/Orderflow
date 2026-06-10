@@ -145,7 +145,12 @@ async function connectVendor(vendorId, vendorName) {
     if (!msg.message || msg.key.fromMe) return;
 
     const from = msg.key.remoteJid;
-    if (!from || from === 'status@broadcast') return;
+
+    // ── Block non-customer message types ──────────────────────────────────
+    if (!from) return;
+    if (from === 'status@broadcast') return;
+    if (from.endsWith('@newsletter')) return;
+    if (from.endsWith('@broadcast')) return;
 
     const text = msg.message?.conversation ||
                  msg.message?.extendedTextMessage?.text || '';
@@ -187,6 +192,11 @@ async function connectVendor(vendorId, vendorName) {
       console.log(`[${vendorName}] Replied: ${finalReply}`);
 
       addToHistory(vendorId, from, 'assistant', finalReply);
+
+      // Reset history after order so conversation can continue fresh
+      if (orderData) {
+        conversationHistory[vendorId][from] = [];
+      }
 
       if (orderData) {
         console.log(`[${vendorName}] Order detected:`, orderData);

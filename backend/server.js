@@ -197,7 +197,26 @@ app.get('/qr', (req, res) => {
 app.use('/webhook', require('./webhook'));
 app.get('/', (req, res) => res.json({ message: 'Nexua OrderFlow server running!' }));
 
+// Add this BEFORE app.listen
+async function reconnectActiveVendors() {
+  try {
+    const { data: vendors } = await supabase
+      .from('vendors')
+      .select('id, business_name')
+      .eq('active', true);
+
+    if (!vendors?.length) return;
+    console.log(`Auto-reconnecting ${vendors.length} active vendor(s)...`);
+    for (const vendor of vendors) {
+      connectVendor(String(vendor.id), vendor.business_name);
+    }
+  } catch (e) {
+    console.error('Auto-reconnect error:', e.message);
+  }
+}
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Nexua OrderFlow server running on port ${PORT}`);
+  reconnectActiveVendors(); // ← replaces the old connectVendor('owner', 'Nexua Owner')
 });

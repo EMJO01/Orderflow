@@ -6,17 +6,11 @@ const fs = require('fs');
 const connections = {};
 const qrCodes = {};
 
-// ── CONVERSATION MEMORY ───────────────────────────────────────────────────────
-// Stores last N messages per customer per vendor
-// Format: { [vendorId]: { [customerJid]: [ {role, content}, ... ] } }
 const conversationHistory = {};
-const MAX_HISTORY = 10; // keep last 10 messages
+const MAX_HISTORY = 10;
 
-// ── RE-ENGAGEMENT TRACKER ─────────────────────────────────────────────────────
-// Tracks last message time per customer per vendor
-// Format: { [vendorId]: { [customerJid]: { lastTime, timer, nudged } } }
 const reEngagementTrackers = {};
-const RE_ENGAGE_DELAY_MS = 30 * 60 * 1000; // 30 minutes
+const RE_ENGAGE_DELAY_MS = 30 * 60 * 1000;
 
 function getHistory(vendorId, from) {
   if (!conversationHistory[vendorId]) conversationHistory[vendorId] = {};
@@ -27,7 +21,6 @@ function getHistory(vendorId, from) {
 function addToHistory(vendorId, from, role, content) {
   const history = getHistory(vendorId, from);
   history.push({ role, content });
-  // Keep only last MAX_HISTORY messages
   if (history.length > MAX_HISTORY) {
     conversationHistory[vendorId][from] = history.slice(-MAX_HISTORY);
   }
@@ -41,7 +34,6 @@ function clearReEngageTimer(vendorId, from) {
 
 function scheduleReEngage(vendorId, from, sock, vendorName, products, country, botInstructions) {
   clearReEngageTimer(vendorId, from);
-
   if (!reEngagementTrackers[vendorId]) reEngagementTrackers[vendorId] = {};
   reEngagementTrackers[vendorId][from] = {
     lastTime: Date.now(),
@@ -51,20 +43,14 @@ function scheduleReEngage(vendorId, from, sock, vendorName, products, country, b
         const tracker = reEngagementTrackers[vendorId]?.[from];
         if (!tracker || tracker.nudged) return;
         tracker.nudged = true;
-
         const history = getHistory(vendorId, from);
         if (!history.length) return;
-
-        // Only re-engage if last message was from customer (not bot)
         const lastMsg = history[history.length - 1];
         if (lastMsg.role === 'assistant') return;
-
         const { generateReEngageReply } = require('./ai');
         const nudge = await generateReEngageReply(vendorName, products, country, botInstructions);
         await sock.sendMessage(from, { text: nudge });
         console.log(`[${vendorName}] Re-engagement sent to ${from}`);
-
-        // Add to history
         addToHistory(vendorId, from, 'assistant', nudge);
       } catch (err) {
         console.error(`[${vendorName}] Re-engage error:`, err.message);
@@ -104,7 +90,6 @@ async function connectVendor(vendorId, vendorName) {
       console.log(`✅ ${vendorName} WhatsApp connected!`);
       connections[vendorId].isReady = true;
       qrCodes[vendorId] = null;
-
       if (vendorId !== 'owner') {
         const supabase = require('./db');
         await supabase.from('vendors').update({ whatsapp_connected: true }).eq('id', vendorId);
@@ -115,12 +100,10 @@ async function connectVendor(vendorId, vendorName) {
       connections[vendorId].isReady = false;
       const shouldReconnect = new Boom(lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
       console.log(`${vendorName} disconnected. Reconnecting: ${shouldReconnect}`);
-
       if (vendorId !== 'owner') {
         const supabase = require('./db');
         await supabase.from('vendors').update({ whatsapp_connected: false }).eq('id', vendorId);
       }
-
       if (shouldReconnect) {
         setTimeout(() => connectVendor(vendorId, vendorName), 3000);
       }
@@ -144,16 +127,16 @@ async function connectVendor(vendorId, vendorName) {
 
     try {
       const supabase = require('./db');
-      const { generateReply } = require('./ai');
+      const { generateReply, extractOrder, cleanReply } = require('./ai');
 
       // 1. Fetch vendor details
       const { data: vendor } = await supabase
         .from('vendors')
-        .select('country, bot_instructions')
+        .select('country, bot_instructions, whatsapp_number')
         .eq('id', vendorId)
         .single();
 
-      // 2. Fetch this vendor's active products
+      // 2. Fetch active products
       let query = supabase.from('products').select('*').eq('active', true);
       if (vendorId !== 'owner') query = query.eq('vendor_id', vendorId);
       const { data: products } = await query;
@@ -164,26 +147,62 @@ async function connectVendor(vendorId, vendorName) {
       // 3. Add customer message to history
       addToHistory(vendorId, from, 'user', text);
 
-      // 4. Get full conversation history for context
+      // 4. Generate reply with full history
       const history = getHistory(vendorId, from);
+      const rawReply = await generateReply(history, products || [], vendorName, country, botInstructions);
 
-      // 5. Generate reply with full history
-      const reply = await generateReply(
-        history,
-        products || [],
-        vendorName,
-        country,
-        botInstructions
-      );
+      // 5. Check for order confirmation
+      const orderData = extractOrder(rawReply);
+      const replyToSend = cleanReply(rawReply);
 
-      // 6. Send reply
-      await sock.sendMessage(from, { text: reply });
-      console.log(`[${vendorName}] Replied: ${reply}`);
+      // 6. Send cleaned reply to customer
+      if (replyToSend) {
+        await sock.sendMessage(from, { text: replyToSend });
+        console.log(`[${vendorName}] Replied: ${replyToSend}`);
+      }
 
-      // 7. Add bot reply to history
-      addToHistory(vendorId, from, 'assistant', reply);
+      // 7. Add cleaned reply to history
+      addToHistory(vendorId, from, 'assistant', replyToSend || rawReply);
 
-      // 8. Schedule re-engagement if customer goes quiet
+      // 8. If order confirmed — save to Supabase and notify vendor
+      if (orderData) {
+        console.log(`[${vendorName}] Order detected:`, orderData);
+
+        // Save order to Supabase
+        await supabase.from('orders').insert([{
+          vendor_id: vendorId === 'owner' ? null : parseInt(vendorId),
+          customer_phone: from.replace('@s.whatsapp.net', '').replace('@lid', ''),
+          customer_name: orderData.name || 'Unknown',
+          items: orderData.items || '',
+          total_price: orderData.total || 0,
+          delivery_address: orderData.address || '',
+          status: 'pending'
+        }]);
+
+        // Notify vendor on their WhatsApp number
+        if (vendor?.whatsapp_number && connections[vendorId]?.isReady) {
+          const vendorJid = vendor.whatsapp_number.replace(/\D/g, '') + '@s.whatsapp.net';
+          const notification =
+`🛍️ *New Order Alert!*
+
+👤 Customer: ${orderData.name || 'Unknown'}
+📦 Items: ${orderData.items || 'N/A'}
+💰 Total: ${orderData.total || 0}
+📍 Address: ${orderData.address || 'N/A'}
+📞 Phone: ${from.replace('@s.whatsapp.net', '').replace('@lid', '')}
+
+Reply to the customer directly to confirm delivery details.`;
+
+          try {
+            await sock.sendMessage(vendorJid, { text: notification });
+            console.log(`[${vendorName}] Vendor notified of new order`);
+          } catch (notifyErr) {
+            console.error(`[${vendorName}] Could not notify vendor:`, notifyErr.message);
+          }
+        }
+      }
+
+      // 9. Schedule re-engagement
       scheduleReEngage(vendorId, from, sock, vendorName, products || [], country, botInstructions);
 
     } catch (err) {

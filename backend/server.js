@@ -148,6 +148,39 @@ app.post('/vendors/:id/disconnect', async (req, res) => {
   res.json({ success: true });
 });
 
+// ─── ORDERS ──────────────────────────────────────────────────────────────────
+
+app.get('/orders', async (req, res) => {
+  const { vendor_id } = req.query;
+  let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
+  if (vendor_id) query = query.eq('vendor_id', vendor_id);
+  const { data, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.get('/orders/stats', async (req, res) => {
+  const { vendor_id } = req.query;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let query = supabase.from('orders').select('*').gte('created_at', today.toISOString());
+  if (vendor_id) query = query.eq('vendor_id', vendor_id);
+  const { data, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+
+  const orders_today = data.length;
+  const revenue_today = data.reduce((sum, o) => sum + (parseFloat(o.total_price) || 0), 0);
+  res.json({ orders_today, revenue_today });
+});
+
+app.put('/orders/:id/status', async (req, res) => {
+  const { status } = req.body;
+  const { error } = await supabase.from('orders').update({ status }).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
 // ─── LEGACY QR ────────────────────────────────────────────────────────────────
 
 app.get('/qr', (req, res) => {

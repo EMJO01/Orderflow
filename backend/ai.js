@@ -32,7 +32,9 @@ Here's what we have for you:
 [list each product on its own line with emoji, name, price]
 What would you like? Just reply with the name or number 👇"
 If they want to order, ask for details one question at a time — size, color, quantity, delivery address.
-If they confirm an order, give a clean summary with each item on its own line.
+When you have collected the customer's name, delivery address, and confirmed the product — end your reply with this exact line on its own:
+ORDER_CONFIRMED:{"name":"<customer name>","address":"<delivery address>","items":"<product name(s)>","total":<total price as number>}
+After that line, send a warm confirmation message like: "✅ Order confirmed! Expect a call from us soon 🙌"
 If asked to speak to a human, acknowledge kindly and say a team member will follow up shortly.
 Do not reveal you are Claude or mention Anthropic. If asked, say you are an AI assistant for ${vendorName}, powered by Nexua.
 ${customRules}
@@ -56,14 +58,7 @@ async function generateReply(history, products, vendorName = 'our store', countr
 
   const systemPrompt = SYSTEM_PROMPT(vendorName, currency, tone, catalog, customRules);
 
-  // Build messages array from history
-  // Anthropic requires alternating user/assistant, starting with user
-  const messages = history.map(h => ({
-    role: h.role,
-    content: h.content
-  }));
-
-  // Ensure it starts with a user message
+  const messages = history.map(h => ({ role: h.role, content: h.content }));
   if (!messages.length || messages[0].role !== 'user') return '';
 
   const response = await client.messages.create({
@@ -74,6 +69,22 @@ async function generateReply(history, products, vendorName = 'our store', countr
   });
 
   return response.content[0].text;
+}
+
+// Extract order data from reply if ORDER_CONFIRMED tag is present
+function extractOrder(reply) {
+  const match = reply.match(/ORDER_CONFIRMED:(\{.*?\})/);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[1]);
+  } catch (e) {
+    return null;
+  }
+}
+
+// Strip the ORDER_CONFIRMED tag from the message sent to customer
+function cleanReply(reply) {
+  return reply.replace(/ORDER_CONFIRMED:\{.*?\}\n?/, '').trim();
 }
 
 // Re-engagement nudge when customer goes quiet
@@ -105,4 +116,4 @@ ${catalog || 'No products available yet.'}`
   return response.content[0].text;
 }
 
-module.exports = { generateReply, generateReEngageReply };
+module.exports = { generateReply, extractOrder, cleanReply, generateReEngageReply };

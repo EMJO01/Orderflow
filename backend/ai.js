@@ -14,26 +14,8 @@ const COUNTRY_CONFIG = {
   'Other':        { currency: '', locale: 'en', tone: 'friendly and professional' },
 };
 
-async function generateReply(customerMessage, products, vendorName = 'our store', country = 'Nigeria', botInstructions = '') {
-  const config = COUNTRY_CONFIG[country] || COUNTRY_CONFIG['Other'];
-  const currency = config.currency;
-  const tone = config.tone;
-
-  const catalog = products
-    .filter(p => p.active)
-    .map(p => `${p.emoji || ''} ${p.name} — ${currency}${p.price}${p.sizes ? ` | Sizes: ${p.sizes}` : ''}${p.colors ? ` | Colors: ${p.colors}` : ''}${p.description ? ` | ${p.description}` : ''}`)
-    .join('\n');
-
-  const customRules = botInstructions
-    ? `\nSpecial business rules you must follow:\n${botInstructions}\n`
-    : '';
-
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 500,
-    messages: [{
-      role: 'user',
-      content: `You are a WhatsApp sales assistant for ${vendorName}.
+const SYSTEM_PROMPT = (vendorName, currency, tone, catalog, customRules) =>
+`You are a WhatsApp sales assistant for ${vendorName}.
 Your tone: ${tone}.
 Keep replies short, warm and natural like a real person texting.
 Always use ${currency} for prices.
@@ -55,12 +37,72 @@ If asked to speak to a human, acknowledge kindly and say a team member will foll
 Do not reveal you are Claude or mention Anthropic. If asked, say you are an AI assistant for ${vendorName}, powered by Nexua.
 ${customRules}
 Our catalog:
-${catalog || 'No products available yet.'}
-Customer message: "${customerMessage}"`
+${catalog || 'No products available yet.'}`;
+
+// history is an array of { role: 'user'|'assistant', content: string }
+async function generateReply(history, products, vendorName = 'our store', country = 'Nigeria', botInstructions = '') {
+  const config = COUNTRY_CONFIG[country] || COUNTRY_CONFIG['Other'];
+  const currency = config.currency;
+  const tone = config.tone;
+
+  const catalog = products
+    .filter(p => p.active)
+    .map(p => `${p.emoji || ''} ${p.name} — ${currency}${p.price}${p.sizes ? ` | Sizes: ${p.sizes}` : ''}${p.colors ? ` | Colors: ${p.colors}` : ''}${p.description ? ` | ${p.description}` : ''}`)
+    .join('\n');
+
+  const customRules = botInstructions
+    ? `\nSpecial business rules you must follow:\n${botInstructions}\n`
+    : '';
+
+  const systemPrompt = SYSTEM_PROMPT(vendorName, currency, tone, catalog, customRules);
+
+  // Build messages array from history
+  // Anthropic requires alternating user/assistant, starting with user
+  const messages = history.map(h => ({
+    role: h.role,
+    content: h.content
+  }));
+
+  // Ensure it starts with a user message
+  if (!messages.length || messages[0].role !== 'user') return '';
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 500,
+    system: systemPrompt,
+    messages
+  });
+
+  return response.content[0].text;
+}
+
+// Re-engagement nudge when customer goes quiet
+async function generateReEngageReply(vendorName, products, country = 'Nigeria', botInstructions = '') {
+  const config = COUNTRY_CONFIG[country] || COUNTRY_CONFIG['Other'];
+  const currency = config.currency;
+  const tone = config.tone;
+
+  const catalog = products
+    .filter(p => p.active)
+    .map(p => `${p.emoji || ''} ${p.name} — ${currency}${p.price}`)
+    .join('\n');
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 200,
+    messages: [{
+      role: 'user',
+      content: `You are a WhatsApp sales assistant for ${vendorName}.
+Tone: ${tone}.
+A customer started a conversation but went quiet. Send a short, warm follow-up message.
+Do NOT be pushy. Just check in naturally, remind them of what's available, and invite them to continue.
+Keep it under 50 words. Use emojis naturally. Use *bold* for product names only.
+Our catalog:
+${catalog || 'No products available yet.'}`
     }]
   });
 
   return response.content[0].text;
 }
 
-module.exports = { generateReply };
+module.exports = { generateReply, generateReEngageReply };

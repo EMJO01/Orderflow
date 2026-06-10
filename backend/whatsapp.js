@@ -6,6 +6,73 @@ const fs = require('fs');
 const connections = {};
 const qrCodes = {};
 
+// ── CONVERSATION MEMORY ───────────────────────────────────────────────────────
+// Stores last N messages per customer per vendor
+// Format: { [vendorId]: { [customerJid]: [ {role, content}, ... ] } }
+const conversationHistory = {};
+const MAX_HISTORY = 10; // keep last 10 messages
+
+// ── RE-ENGAGEMENT TRACKER ─────────────────────────────────────────────────────
+// Tracks last message time per customer per vendor
+// Format: { [vendorId]: { [customerJid]: { lastTime, timer, nudged } } }
+const reEngagementTrackers = {};
+const RE_ENGAGE_DELAY_MS = 30 * 60 * 1000; // 30 minutes
+
+function getHistory(vendorId, from) {
+  if (!conversationHistory[vendorId]) conversationHistory[vendorId] = {};
+  if (!conversationHistory[vendorId][from]) conversationHistory[vendorId][from] = [];
+  return conversationHistory[vendorId][from];
+}
+
+function addToHistory(vendorId, from, role, content) {
+  const history = getHistory(vendorId, from);
+  history.push({ role, content });
+  // Keep only last MAX_HISTORY messages
+  if (history.length > MAX_HISTORY) {
+    conversationHistory[vendorId][from] = history.slice(-MAX_HISTORY);
+  }
+}
+
+function clearReEngageTimer(vendorId, from) {
+  if (reEngagementTrackers[vendorId]?.[from]?.timer) {
+    clearTimeout(reEngagementTrackers[vendorId][from].timer);
+  }
+}
+
+function scheduleReEngage(vendorId, from, sock, vendorName, products, country, botInstructions) {
+  clearReEngageTimer(vendorId, from);
+
+  if (!reEngagementTrackers[vendorId]) reEngagementTrackers[vendorId] = {};
+  reEngagementTrackers[vendorId][from] = {
+    lastTime: Date.now(),
+    nudged: false,
+    timer: setTimeout(async () => {
+      try {
+        const tracker = reEngagementTrackers[vendorId]?.[from];
+        if (!tracker || tracker.nudged) return;
+        tracker.nudged = true;
+
+        const history = getHistory(vendorId, from);
+        if (!history.length) return;
+
+        // Only re-engage if last message was from customer (not bot)
+        const lastMsg = history[history.length - 1];
+        if (lastMsg.role === 'assistant') return;
+
+        const { generateReEngageReply } = require('./ai');
+        const nudge = await generateReEngageReply(vendorName, products, country, botInstructions);
+        await sock.sendMessage(from, { text: nudge });
+        console.log(`[${vendorName}] Re-engagement sent to ${from}`);
+
+        // Add to history
+        addToHistory(vendorId, from, 'assistant', nudge);
+      } catch (err) {
+        console.error(`[${vendorName}] Re-engage error:`, err.message);
+      }
+    }, RE_ENGAGE_DELAY_MS)
+  };
+}
+
 async function connectVendor(vendorId, vendorName) {
   if (connections[vendorId]?.isReady) {
     console.log(`✅ Vendor ${vendorName} already connected`);
@@ -79,7 +146,7 @@ async function connectVendor(vendorId, vendorName) {
       const supabase = require('./db');
       const { generateReply } = require('./ai');
 
-      // 1. Fetch vendor details FIRST
+      // 1. Fetch vendor details
       const { data: vendor } = await supabase
         .from('vendors')
         .select('country, bot_instructions')
@@ -91,17 +158,34 @@ async function connectVendor(vendorId, vendorName) {
       if (vendorId !== 'owner') query = query.eq('vendor_id', vendorId);
       const { data: products } = await query;
 
-      // 3. Generate and send reply
+      const country = vendor?.country || 'Nigeria';
+      const botInstructions = vendor?.bot_instructions || '';
+
+      // 3. Add customer message to history
+      addToHistory(vendorId, from, 'user', text);
+
+      // 4. Get full conversation history for context
+      const history = getHistory(vendorId, from);
+
+      // 5. Generate reply with full history
       const reply = await generateReply(
-        text,
+        history,
         products || [],
         vendorName,
-        vendor?.country || 'Nigeria',
-        vendor?.bot_instructions || ''
+        country,
+        botInstructions
       );
 
+      // 6. Send reply
       await sock.sendMessage(from, { text: reply });
       console.log(`[${vendorName}] Replied: ${reply}`);
+
+      // 7. Add bot reply to history
+      addToHistory(vendorId, from, 'assistant', reply);
+
+      // 8. Schedule re-engagement if customer goes quiet
+      scheduleReEngage(vendorId, from, sock, vendorName, products || [], country, botInstructions);
+
     } catch (err) {
       console.error(`[${vendorName}] Reply error:`, err.message);
     }

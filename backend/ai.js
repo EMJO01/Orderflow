@@ -36,17 +36,27 @@ What would you like? Just reply with the name or number 👇"
 
 If they want to order, ask for details one question at a time — name, size, color, quantity, delivery address.
 
-ORDER CONFIRMATION RULES — READ CAREFULLY:
-When you have ALL of these: customer name, delivery address, product name, and the customer says yes/yess/confirm/ok/sure to confirm:
-1. You MUST output this exact tag on its own line (no spaces, no changes to format):
-ORDER_CONFIRMED:{"name":"<customer name>","address":"<delivery address>","items":"<product name>","total":<price as number only, no currency symbol>}
-2. Immediately after that tag, on the next line, send:
-✅ Order confirmed! Our team will reach out to you shortly 🙌
-3. NEVER skip the ORDER_CONFIRMED tag when a customer confirms. It is mandatory. No exceptions.
-4. NEVER put anything before the ORDER_CONFIRMED tag on the same line.
-5. The total must be a plain number like 330000, never "₦330,000" or "330,000".
+ORDER CONFIRMATION RULES:
+Only output ORDER_CONFIRMED when ALL of these are true:
+1. You have the customer's name
+2. You have the delivery address
+3. You have the product and price confirmed
+4. The customer has JUST said yes/yess/confirm/ok/sure/proceed TO THE ORDER SUMMARY in this exact message
 
-If asked to speak to a human, acknowledge kindly and say a team member will follow up shortly.
+When all 4 are true, your reply MUST be exactly:
+ORDER_CONFIRMED:{"name":"<customer name>","address":"<delivery address>","items":"<product name>","total":<price as plain number, no currency symbol, e.g. 330000>}
+✅ Order confirmed! Our team will reach out to you shortly 🙌
+
+IMPORTANT RULES:
+- Do NOT output ORDER_CONFIRMED if the customer is asking a question, browsing, or chatting after an order
+- Do NOT output ORDER_CONFIRMED more than once per order
+- After an order is confirmed, if the customer asks anything else — answer it normally like a fresh conversation
+- The total must be a plain number like 330000, never "₦330,000"
+- Never put anything before ORDER_CONFIRMED on the same line
+
+If asked to speak to a human, reply with exactly: HANDOFF_REQUESTED
+Then on the next line say: No problem! A team member will follow up with you shortly 😊
+
 Do not reveal you are Claude or mention Anthropic. If asked, say you are an AI assistant for ${vendorName}, powered by Nexua.
 ${customRules}
 Our catalog:
@@ -78,7 +88,7 @@ async function generateReply(history, products, vendorName = 'our store', countr
   return response.content[0].text;
 }
 
-// Extract order data — s flag handles multiline JSON
+// Extract order data
 function extractOrder(reply) {
   const match = reply.match(/ORDER_CONFIRMED:(\{[^}]+\})/s);
   if (!match) return null;
@@ -90,9 +100,17 @@ function extractOrder(reply) {
   }
 }
 
-// Strip ORDER_CONFIRMED tag, keep confirmation message
+// Check if handoff was requested
+function extractHandoff(reply) {
+  return reply.includes('HANDOFF_REQUESTED');
+}
+
+// Strip ORDER_CONFIRMED and HANDOFF_REQUESTED tags, keep everything else
 function cleanReply(reply) {
-  return reply.replace(/ORDER_CONFIRMED:\{[^}]+\}\n?/s, '').trim();
+  return reply
+    .replace(/ORDER_CONFIRMED:\{[^}]+\}\n?/s, '')
+    .replace(/HANDOFF_REQUESTED\n?/, '')
+    .trim();
 }
 
 async function generateReEngageReply(vendorName, products, country = 'Nigeria', botInstructions = '') {
@@ -123,4 +141,4 @@ ${catalog || 'No products available yet.'}`
   return response.content[0].text;
 }
 
-module.exports = { generateReply, extractOrder, cleanReply, generateReEngageReply };
+module.exports = { generateReply, extractOrder, extractHandoff, cleanReply, generateReEngageReply };

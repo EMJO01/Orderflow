@@ -146,7 +146,7 @@ async function connectVendor(vendorId, vendorName) {
 
     const from = msg.key.remoteJid;
 
-    // ── Block non-customer message types ──────────────────────────────────
+    // Block non-customer message types
     if (!from) return;
     if (from === 'status@broadcast') return;
     if (from.endsWith('@newsletter')) return;
@@ -160,7 +160,7 @@ async function connectVendor(vendorId, vendorName) {
 
     try {
       const supabase = require('./db');
-      const { generateReply, extractOrder, cleanReply } = require('./ai');
+      const { generateReply, extractOrder, extractHandoff, cleanReply } = require('./ai');
 
       const { data: vendor } = await supabase
         .from('vendors')
@@ -182,22 +182,24 @@ async function connectVendor(vendorId, vendorName) {
 
       console.log(`[${vendorName}] Raw reply: ${rawReply}`);
 
-      const orderData   = extractOrder(rawReply);
-      const cleanedText = cleanReply(rawReply);
-
-      // Always send something — fallback if cleanReply strips everything
-      const finalReply = cleanedText || '✅ Order confirmed! Our team will reach out to you shortly 🙌';
+      const orderData    = extractOrder(rawReply);
+      const handoffNeeded = extractHandoff(rawReply);
+      const cleanedText  = cleanReply(rawReply);
+      const finalReply   = cleanedText || '✅ Order confirmed! Our team will reach out to you shortly 🙌';
 
       await sock.sendMessage(from, { text: finalReply });
       console.log(`[${vendorName}] Replied: ${finalReply}`);
 
+      // Store cleaned reply in history (without tags)
       addToHistory(vendorId, from, 'assistant', finalReply);
 
-      // Reset history after order so conversation can continue fresh
+      // Reset history after confirmed order so customer can chat fresh
       if (orderData) {
         conversationHistory[vendorId][from] = [];
+        console.log(`[${vendorName}] Conversation history reset after order`);
       }
 
+      // Save order to Supabase
       if (orderData) {
         console.log(`[${vendorName}] Order detected:`, orderData);
 
@@ -217,6 +219,7 @@ async function connectVendor(vendorId, vendorName) {
           console.log(`[${vendorName}] Order saved to Supabase ✅`);
         }
 
+        // Notify vendor on WhatsApp
         if (vendor?.whatsapp_number && connections[vendorId]?.isReady) {
           const vendorJid = vendor.whatsapp_number.replace(/\D/g, '') + '@s.whatsapp.net';
           const notification =
@@ -224,7 +227,7 @@ async function connectVendor(vendorId, vendorName) {
 
 👤 Customer: ${orderData.name    || 'Unknown'}
 📦 Items: ${orderData.items      || 'N/A'}
-💰 Total: ${orderData.total      || 0}
+💰 Total: ₦${Number(orderData.total || 0).toLocaleString()}
 📍 Address: ${orderData.address  || 'N/A'}
 📞 Phone: ${from.replace('@s.whatsapp.net', '').replace('@lid', '')}
 
@@ -234,6 +237,28 @@ Reply to the customer directly to confirm delivery details.`;
             console.log(`[${vendorName}] Vendor notified of new order`);
           } catch (notifyErr) {
             console.error(`[${vendorName}] Could not notify vendor:`, notifyErr.message);
+          }
+        }
+      }
+
+      // Handle human handoff
+      if (handoffNeeded) {
+        console.log(`[${vendorName}] Handoff requested by ${from}`);
+
+        if (vendor?.whatsapp_number && connections[vendorId]?.isReady) {
+          const vendorJid = vendor.whatsapp_number.replace(/\D/g, '') + '@s.whatsapp.net';
+          const handoffMsg =
+`🙋 *Customer Wants to Talk!*
+
+A customer is asking to speak with a human.
+📞 Their number: ${from.replace('@s.whatsapp.net', '').replace('@lid', '')}
+
+Reply to them directly on WhatsApp to continue the conversation.`;
+          try {
+            await sock.sendMessage(vendorJid, { text: handoffMsg });
+            console.log(`[${vendorName}] Vendor notified of handoff request`);
+          } catch (notifyErr) {
+            console.error(`[${vendorName}] Could not notify vendor for handoff:`, notifyErr.message);
           }
         }
       }

@@ -10,7 +10,6 @@ async function useSupabaseAuthState(vendorId) {
   let creds;
   let keyData = {};
 
-  // ── Load from Supabase ───────────────────────────────────────────────────
   try {
     const { data, error } = await supabase
       .from('whatsapp_sessions')
@@ -31,7 +30,22 @@ async function useSupabaseAuthState(vendorId) {
     console.log(`[Auth] No session for vendor ${vendorId} — fresh start`);
   }
 
-  // ── Raw key store (plain object, persisted to Supabase) ──────────────────
+  const saveState = async () => {
+    try {
+      await supabase
+        .from('whatsapp_sessions')
+        .upsert({
+          vendor_id:  String(vendorId),
+          creds:      JSON.parse(JSON.stringify(creds,   BufferJSON.replacer)),
+          keys:       JSON.parse(JSON.stringify(keyData, BufferJSON.replacer)),
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'vendor_id' });
+      console.log(`[Auth] ✅ Session saved for vendor ${vendorId}`);
+    } catch (e) {
+      console.error(`[Auth] Save failed for vendor ${vendorId}:`, e.message);
+    }
+  };
+
   const rawKeys = {
     get: async (type, ids) => {
       const result = {};
@@ -56,23 +70,6 @@ async function useSupabaseAuthState(vendorId) {
     }
   };
 
-  // ── Save to Supabase ─────────────────────────────────────────────────────
-  const saveState = async () => {
-    try {
-      await supabase
-        .from('whatsapp_sessions')
-        .upsert({
-          vendor_id:  String(vendorId),
-          creds:      JSON.parse(JSON.stringify(creds,    BufferJSON.replacer)),
-          keys:       JSON.parse(JSON.stringify(keyData,  BufferJSON.replacer)),
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'vendor_id' });
-    } catch (e) {
-      console.error(`[Auth] Save failed for vendor ${vendorId}:`, e.message);
-    }
-  };
-
-  // ── Wrap with Baileys' own cacheable store (handles Signal crypto) ────────
   const logger = pino({ level: 'silent' });
   const keys   = makeCacheableSignalKeyStore(rawKeys, logger);
 

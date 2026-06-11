@@ -28,7 +28,7 @@ Formatting rules — strictly follow these:
 - Keep each message under 150 words
 - Never write in long paragraphs
 
-If a customer greets, reply like this format:
+If a customer greets for the first time, reply like this format:
 "Welcome to ${vendorName}! 😊
 Here's what we have for you:
 [list each product on its own line with emoji, name, price]
@@ -36,21 +36,25 @@ What would you like? Just reply with the name or number 👇"
 
 If they want to order, ask for details one question at a time — name, size, color, quantity, delivery address.
 
+AFTER ORDER IS CONFIRMED:
+If the customer says things like "alright", "ok", "thanks", "noted", "cool" after getting the order confirmation — respond warmly like:
+"You're welcome! 😊 We'll be in touch soon. Feel free to message us anytime if you need anything 🙌"
+Do NOT show the catalog again unless they explicitly ask to see products or want to order something new.
+
 ORDER CONFIRMATION RULES:
 Only output ORDER_CONFIRMED when ALL of these are true:
 1. You have the customer's name
 2. You have the delivery address
 3. You have the product and price confirmed
-4. The customer has JUST said yes/yess/confirm/ok/sure/proceed TO THE ORDER SUMMARY in this exact message
+4. The customer has JUST said yes/yess/confirm/ok/sure/proceed TO THE ORDER SUMMARY
 
-When all 4 are true, your reply MUST be exactly:
-ORDER_CONFIRMED:{"name":"<customer name>","address":"<delivery address>","items":"<product name>","total":<price as plain number, no currency symbol, e.g. 330000>}
+When all 4 are true, your reply MUST be:
+ORDER_CONFIRMED:{"name":"<customer name>","address":"<delivery address>","items":"<product name>","total":<price as plain number e.g. 330000>}
 ✅ Order confirmed! Our team will reach out to you shortly 🙌
 
-IMPORTANT RULES:
-- Do NOT output ORDER_CONFIRMED if the customer is asking a question, browsing, or chatting after an order
-- Do NOT output ORDER_CONFIRMED more than once per order
-- After an order is confirmed, if the customer asks anything else — answer it normally like a fresh conversation
+IMPORTANT:
+- Do NOT output ORDER_CONFIRMED if the customer is asking questions or just chatting
+- Do NOT show the catalog again after an order unless customer asks
 - The total must be a plain number like 330000, never "₦330,000"
 - Never put anything before ORDER_CONFIRMED on the same line
 
@@ -75,29 +79,21 @@ async function generateReply(history, products, vendorName = 'our store', countr
   const customRules  = botInstructions ? `\nSpecial business rules you must follow:\n${botInstructions}\n` : '';
   const systemPrompt = SYSTEM_PROMPT(vendorName, currency, tone, catalog, customRules);
 
-  // Ensure history is valid — must start with user message
   let messages = history.map(h => ({ role: h.role, content: h.content }));
-
-  // Filter out any empty content
   messages = messages.filter(m => m.content && m.content.trim().length > 0);
 
-  // Must start with user role
-  while (messages.length > 0 && messages[0].role !== 'user') {
-    messages.shift();
-  }
-
+  while (messages.length > 0 && messages[0].role !== 'user') messages.shift();
   if (!messages.length) {
     console.error('[AI] generateReply called with empty or invalid history');
     return '';
   }
 
-  // Ensure alternating roles (Claude API requirement)
+  // Fix alternating roles
   const fixed = [messages[0]];
   for (let i = 1; i < messages.length; i++) {
     if (messages[i].role !== fixed[fixed.length - 1].role) {
       fixed.push(messages[i]);
     } else {
-      // Merge consecutive same-role messages
       fixed[fixed.length - 1].content += '\n' + messages[i].content;
     }
   }
@@ -112,13 +108,10 @@ async function generateReply(history, products, vendorName = 'our store', countr
   });
 
   const text = response.content[0]?.text || '';
-  if (!text) {
-    console.error('[AI] Claude returned empty response. Stop reason:', response.stop_reason);
-  }
+  if (!text) console.error('[AI] Claude returned empty. Stop reason:', response.stop_reason);
   return text;
 }
 
-// Extract order data
 function extractOrder(reply) {
   const match = reply.match(/ORDER_CONFIRMED:(\{[^}]+\})/s);
   if (!match) return null;
@@ -130,12 +123,10 @@ function extractOrder(reply) {
   }
 }
 
-// Check if handoff was requested
 function extractHandoff(reply) {
   return reply.includes('HANDOFF_REQUESTED');
 }
 
-// Strip ORDER_CONFIRMED and HANDOFF_REQUESTED tags
 function cleanReply(reply) {
   return reply
     .replace(/ORDER_CONFIRMED:\{[^}]+\}\n?/s, '')

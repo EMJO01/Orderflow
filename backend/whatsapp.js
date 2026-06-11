@@ -9,6 +9,9 @@ const MAX_HISTORY = 10;
 const reEngagementTrackers = {};
 const RE_ENGAGE_DELAY_MS = 30 * 60 * 1000;
 
+// Track whether order was just confirmed per customer
+const orderConfirmedState = {};
+
 function getHistory(vendorId, from) {
   if (!conversationHistory[vendorId]) conversationHistory[vendorId] = {};
   if (!conversationHistory[vendorId][from]) conversationHistory[vendorId][from] = [];
@@ -145,8 +148,6 @@ async function connectVendor(vendorId, vendorName) {
     if (!msg.message || msg.key.fromMe) return;
 
     const from = msg.key.remoteJid;
-
-    // Block non-customer message types
     if (!from) return;
     if (from === 'status@broadcast') return;
     if (from.endsWith('@newsletter')) return;
@@ -182,25 +183,21 @@ async function connectVendor(vendorId, vendorName) {
 
       console.log(`[${vendorName}] Raw reply: ${rawReply}`);
 
-      const orderData    = extractOrder(rawReply);
+      const orderData     = extractOrder(rawReply);
       const handoffNeeded = extractHandoff(rawReply);
-      const cleanedText  = cleanReply(rawReply);
-      const finalReply   = cleanedText || '✅ Order confirmed! Our team will reach out to you shortly 🙌';
+      const cleanedText   = cleanReply(rawReply);
+      const finalReply    = cleanedText || '✅ Order confirmed! Our team will reach out to you shortly 🙌';
 
       await sock.sendMessage(from, { text: finalReply });
       console.log(`[${vendorName}] Replied: ${finalReply}`);
 
-      // Store cleaned reply in history (without tags)
       addToHistory(vendorId, from, 'assistant', finalReply);
 
-      // Reset history after confirmed order so customer can chat fresh
+      // After order confirmed — keep history but mark state so bot knows order is done
       if (orderData) {
-        conversationHistory[vendorId][from] = [];
-        console.log(`[${vendorName}] Conversation history reset after order`);
-      }
+        if (!orderConfirmedState[vendorId]) orderConfirmedState[vendorId] = {};
+        orderConfirmedState[vendorId][from] = true;
 
-      // Save order to Supabase
-      if (orderData) {
         console.log(`[${vendorName}] Order detected:`, orderData);
 
         const { error: orderError } = await supabase.from('orders').insert([{
@@ -218,6 +215,15 @@ async function connectVendor(vendorId, vendorName) {
         } else {
           console.log(`[${vendorName}] Order saved to Supabase ✅`);
         }
+
+        // Save dashboard notification
+        await supabase.from('notifications').insert([{
+          vendor_id: vendorId === 'owner' ? null : parseInt(vendorId),
+          type:      'order',
+          message:   `New order from ${orderData.name || 'Unknown'} — ${orderData.items} — ₦${Number(orderData.total || 0).toLocaleString()}`,
+          phone:     from.replace('@s.whatsapp.net', '').replace('@lid', ''),
+          read:      false
+        }]);
 
         // Notify vendor on WhatsApp
         if (vendor?.whatsapp_number && connections[vendorId]?.isReady) {
@@ -245,17 +251,23 @@ Reply to the customer directly to confirm delivery details.`;
       if (handoffNeeded) {
         console.log(`[${vendorName}] Handoff requested by ${from}`);
 
+        // Save dashboard notification
+        const customerPhone = from.replace('@s.whatsapp.net', '').replace('@lid', '');
+        await supabase.from('notifications').insert([{
+          vendor_id: vendorId === 'owner' ? null : parseInt(vendorId),
+          type:      'handoff',
+          message:   `Customer ${customerPhone} wants to speak to a human`,
+          phone:     customerPhone,
+          read:      false
+        }]);
+
+        // Notify vendor on WhatsApp
         if (vendor?.whatsapp_number && connections[vendorId]?.isReady) {
           const vendorJid = vendor.whatsapp_number.replace(/\D/g, '') + '@s.whatsapp.net';
-          const handoffMsg =
-`🙋 *Customer Wants to Talk!*
-
-A customer is asking to speak with a human.
-📞 Their number: ${from.replace('@s.whatsapp.net', '').replace('@lid', '')}
-
-Reply to them directly on WhatsApp to continue the conversation.`;
           try {
-            await sock.sendMessage(vendorJid, { text: handoffMsg });
+            await sock.sendMessage(vendorJid, {
+              text: `🙋 *Customer Wants to Talk!*\n\nA customer is asking to speak with a human.\n📞 Their number: ${customerPhone}\n\nReply to them directly on WhatsApp.`
+            });
             console.log(`[${vendorName}] Vendor notified of handoff request`);
           } catch (notifyErr) {
             console.error(`[${vendorName}] Could not notify vendor for handoff:`, notifyErr.message);

@@ -8,9 +8,10 @@ const conversationHistory = {};
 const MAX_HISTORY = 10;
 const reEngagementTrackers = {};
 const RE_ENGAGE_DELAY_MS = 30 * 60 * 1000;
-
-// Track whether order was just confirmed per customer
 const orderConfirmedState = {};
+
+// Track which customers have been logged as conversations this session
+const loggedConversations = {};
 
 function getHistory(vendorId, from) {
   if (!conversationHistory[vendorId]) conversationHistory[vendorId] = {};
@@ -176,6 +177,16 @@ async function connectVendor(vendorId, vendorName) {
       const country         = vendor?.country         || 'Nigeria';
       const botInstructions = vendor?.bot_instructions || '';
 
+      // ── Log conversation (once per customer per session) ─────────────────
+      const convKey = `${vendorId}:${from}`;
+      if (!loggedConversations[convKey] && vendorId !== 'owner') {
+        loggedConversations[convKey] = true;
+        await supabase.from('conversations').insert([{
+          vendor_id:      parseInt(vendorId),
+          customer_phone: from.replace('@s.whatsapp.net', '').replace('@lid', '')
+        }]);
+      }
+
       addToHistory(vendorId, from, 'user', text);
 
       const history  = getHistory(vendorId, from);
@@ -193,7 +204,6 @@ async function connectVendor(vendorId, vendorName) {
 
       addToHistory(vendorId, from, 'assistant', finalReply);
 
-      // After order confirmed — keep history but mark state so bot knows order is done
       if (orderData) {
         if (!orderConfirmedState[vendorId]) orderConfirmedState[vendorId] = {};
         orderConfirmedState[vendorId][from] = true;
@@ -216,7 +226,6 @@ async function connectVendor(vendorId, vendorName) {
           console.log(`[${vendorName}] Order saved to Supabase ✅`);
         }
 
-        // Save dashboard notification
         await supabase.from('notifications').insert([{
           vendor_id: vendorId === 'owner' ? null : parseInt(vendorId),
           type:      'order',
@@ -225,7 +234,6 @@ async function connectVendor(vendorId, vendorName) {
           read:      false
         }]);
 
-        // Notify vendor on WhatsApp
         if (vendor?.whatsapp_number && connections[vendorId]?.isReady) {
           const vendorJid = vendor.whatsapp_number.replace(/\D/g, '') + '@s.whatsapp.net';
           const notification =
@@ -247,11 +255,8 @@ Reply to the customer directly to confirm delivery details.`;
         }
       }
 
-      // Handle human handoff
       if (handoffNeeded) {
         console.log(`[${vendorName}] Handoff requested by ${from}`);
-
-        // Save dashboard notification
         const customerPhone = from.replace('@s.whatsapp.net', '').replace('@lid', '');
         await supabase.from('notifications').insert([{
           vendor_id: vendorId === 'owner' ? null : parseInt(vendorId),
@@ -261,7 +266,6 @@ Reply to the customer directly to confirm delivery details.`;
           read:      false
         }]);
 
-        // Notify vendor on WhatsApp
         if (vendor?.whatsapp_number && connections[vendorId]?.isReady) {
           const vendorJid = vendor.whatsapp_number.replace(/\D/g, '') + '@s.whatsapp.net';
           try {

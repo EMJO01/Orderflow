@@ -192,6 +192,97 @@ app.put('/notifications/:id/read', async (req, res) => {
   res.json({ success: true });
 });
 
+// ─── ANALYTICS ────────────────────────────────────────────────────────────────
+
+app.get('/analytics/revenue', async (req, res) => {
+  const { vendor_id } = req.query;
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0,0,0,0);
+    days.push(d);
+  }
+  try {
+    const results = [];
+    for (const day of days) {
+      const next = new Date(day); next.setDate(next.getDate() + 1);
+      let q = supabase.from('orders').select('total_price').gte('created_at', day.toISOString()).lt('created_at', next.toISOString()).neq('status','cancelled');
+      if (vendor_id) q = q.eq('vendor_id', vendor_id);
+      const { data } = await q;
+      const revenue = (data||[]).reduce((sum,o) => sum+(parseFloat(o.total_price)||0),0);
+      results.push({ date: day.toLocaleDateString('en-GB',{weekday:'short',day:'numeric'}), revenue });
+    }
+    res.json(results);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/analytics/conversion', async (req, res) => {
+  const { vendor_id } = req.query;
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0,0,0,0);
+    days.push(d);
+  }
+  try {
+    const results = [];
+    for (const day of days) {
+      const next = new Date(day); next.setDate(next.getDate() + 1);
+      let cq = supabase.from('conversations').select('id',{count:'exact'}).gte('started_at',day.toISOString()).lt('started_at',next.toISOString());
+      if (vendor_id) cq = cq.eq('vendor_id', vendor_id);
+      let oq = supabase.from('orders').select('id',{count:'exact'}).gte('created_at',day.toISOString()).lt('created_at',next.toISOString());
+      if (vendor_id) oq = oq.eq('vendor_id', vendor_id);
+      const [{ count: convs },{ count: ords }] = await Promise.all([cq, oq]);
+      results.push({ date: day.toLocaleDateString('en-GB',{weekday:'short',day:'numeric'}), conversations: convs||0, orders: ords||0 });
+    }
+    res.json(results);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/analytics/top-products', async (req, res) => {
+  const { vendor_id } = req.query;
+  try {
+    let q = supabase.from('orders').select('items, total_price').neq('status','cancelled');
+    if (vendor_id) q = q.eq('vendor_id', vendor_id);
+    const { data } = await q;
+    const counts = {}, revenue = {};
+    (data||[]).forEach(o => {
+      const name = (o.items||'Unknown').trim();
+      counts[name]  = (counts[name]  || 0) + 1;
+      revenue[name] = (revenue[name] || 0) + (parseFloat(o.total_price)||0);
+    });
+    const top = Object.entries(counts).map(([name,orders]) => ({ name, orders, revenue: revenue[name]||0 })).sort((a,b) => b.orders-a.orders).slice(0,5);
+    res.json(top);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/analytics/order-status', async (req, res) => {
+  const { vendor_id } = req.query;
+  try {
+    let q = supabase.from('orders').select('status');
+    if (vendor_id) q = q.eq('vendor_id', vendor_id);
+    const { data } = await q;
+    const counts = { pending:0, confirmed:0, delivered:0, cancelled:0 };
+    (data||[]).forEach(o => { if (counts[o.status]!==undefined) counts[o.status]++; });
+    res.json(counts);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/analytics/summary', async (req, res) => {
+  const { vendor_id } = req.query;
+  try {
+    let oq = supabase.from('orders').select('total_price, status').neq('status','cancelled');
+    if (vendor_id) oq = oq.eq('vendor_id', vendor_id);
+    let cq = supabase.from('conversations').select('id',{count:'exact'});
+    if (vendor_id) cq = cq.eq('vendor_id', vendor_id);
+    const [{ data: orders },{ count: totalConvs }] = await Promise.all([oq, cq]);
+    const totalRevenue = (orders||[]).reduce((s,o) => s+(parseFloat(o.total_price)||0),0);
+    const totalOrders  = (orders||[]).length;
+    const convRate     = totalConvs > 0 ? ((totalOrders/totalConvs)*100).toFixed(1) : '0.0';
+    res.json({ totalRevenue, totalOrders, totalConvs: totalConvs||0, convRate });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ─── LEGACY QR ────────────────────────────────────────────────────────────────
 
 app.get('/qr', (req, res) => {

@@ -7,6 +7,11 @@ require('dotenv').config();
 const supabase = require('./db');
 const { connectVendor, getQR, startFollowUpWorker } = require('./whatsapp');
 
+// A WhatsApp connection error should never take the whole server down for every vendor.
+// The error is logged so it shows up in Render Logs.
+process.on('unhandledRejection', err => console.error('Unhandled rejection:', err));
+process.on('uncaughtException', err => console.error('Uncaught exception:', err));
+
 const app = express();
 
 // Render sits behind a proxy. Without this, the login rate limiter sees every request as one IP.

@@ -501,6 +501,18 @@ textarea{resize:vertical; min-height:70px;}
 
 <script>
 const API = 'https://rady-bot.onrender.com';
+
+// Sends the login token with every API call, and signs out if the server rejects it
+const _nativeFetch = window.fetch.bind(window);
+window.fetch = async (url, opts = {}) => {
+  const isApi = String(url).startsWith(API);
+  if (isApi && vendor && vendor.token) {
+    opts = { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + vendor.token } };
+  }
+  const res = await _nativeFetch(url, opts);
+  if (isApi && res.status === 401) logout();
+  return res;
+};
 let properties = [], leads = [], viewings = [];
 let editingPropertyId = null, activeLeadId = null;
 let currentCat = 'all', searchTerm = '';

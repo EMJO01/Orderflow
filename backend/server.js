@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
+const bcrypt = require('bcryptjs');
 require('dotenv').config();
 const supabase = require('./db');
 const { connectVendor, getQR, startFollowUpWorker } = require('./whatsapp');
@@ -32,6 +33,39 @@ if (!process.env.ADMIN_PASSWORD || !process.env.JWT_SECRET) {
 
 const TRIAL_DAYS = 3;
 
+// ─── AUTH HELPERS ──────────────────────────────────────────────────────────────
+// Vendor tokens are issued by /login. Admin tokens are issued by /admin/login.
+const vendorLoginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
+
+function readToken(req) {
+  try {
+    const t = (req.headers.authorization || '').replace('Bearer ', '');
+    return jwt.verify(t, process.env.JWT_SECRET);
+  } catch { return null; }
+}
+
+// Accepts a vendor token or an admin token
+function auth(req, res, next) {
+  const p = readToken(req);
+  if (!p) return res.status(401).json({ error: 'Unauthorized' });
+  if (p.role === 'admin') { req.isAdmin = true; return next(); }
+  if (p.role === 'vendor' && p.vendor_id != null) { req.vendorId = String(p.vendor_id); return next(); }
+  res.status(401).json({ error: 'Unauthorized' });
+}
+
+const forbid = res => res.status(403).json({ error: 'Forbidden' });
+// A vendor may only touch their own data. Admin tokens skip these checks.
+const ownParam = (req, res, next) => (req.isAdmin || String(req.params.id) === req.vendorId) ? next() : forbid(res);
+const ownQuery = (req, res, next) => (req.isAdmin || String(req.query.vendor_id) === req.vendorId) ? next() : forbid(res);
+const ownBody  = (req, res, next) => (req.isAdmin || String(req.body && req.body.vendor_id) === req.vendorId) ? next() : forbid(res);
+const ownsRow = table => async (req, res, next) => {
+  if (req.isAdmin) return next();
+  const { data } = await supabase.from(table).select('vendor_id').eq('id', req.params.id).single();
+  if (!data || String(data.vendor_id) !== req.vendorId) return forbid(res);
+  next();
+};
+
+
 // ─── PRODUCTS (ecommerce) ──────────────────────────────────────────────────────
 
 app.get('/products', async (req, res) => {
@@ -43,7 +77,7 @@ app.get('/products', async (req, res) => {
   res.json(data);
 });
 
-app.post('/products', async (req, res) => {
+app.post('/products', auth, ownBody, async (req, res) => {
   const product = {
     name: req.body.name, price: req.body.price, category: req.body.category,
     description: req.body.desc || req.body.description || '',
@@ -56,7 +90,7 @@ app.post('/products', async (req, res) => {
   res.json(data[0]);
 });
 
-app.put('/products/:id', async (req, res) => {
+app.put('/products/:id', auth, ownsRow('products'), async (req, res) => {
   const product = {
     name: req.body.name, price: req.body.price, category: req.body.category,
     description: req.body.desc || req.body.description || '',
@@ -68,7 +102,7 @@ app.put('/products/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-app.delete('/products/:id', async (req, res) => {
+app.delete('/products/:id', auth, ownsRow('products'), async (req, res) => {
   const { error } = await supabase.from('products').delete().eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
@@ -76,7 +110,7 @@ app.delete('/products/:id', async (req, res) => {
 
 // ─── PROPERTIES (real estate) ──────────────────────────────────────────────────
 
-app.get('/properties', async (req, res) => {
+app.get('/properties', auth, ownQuery, async (req, res) => {
   const { vendor_id } = req.query;
   let query = supabase.from('properties').select('*').order('created_at', { ascending: false });
   if (vendor_id) query = query.eq('vendor_id', vendor_id);
@@ -85,7 +119,7 @@ app.get('/properties', async (req, res) => {
   res.json(data);
 });
 
-app.post('/properties', async (req, res) => {
+app.post('/properties', auth, ownBody, async (req, res) => {
   const b = req.body;
   const property = {
     vendor_id: b.vendor_id || null,
@@ -103,7 +137,7 @@ app.post('/properties', async (req, res) => {
   res.json(data[0]);
 });
 
-app.put('/properties/:id', async (req, res) => {
+app.put('/properties/:id', auth, ownsRow('properties'), async (req, res) => {
   const b = req.body;
   const property = {
     title: b.title, listing_type: b.listing_type, property_type: b.property_type,
@@ -120,7 +154,7 @@ app.put('/properties/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-app.delete('/properties/:id', async (req, res) => {
+app.delete('/properties/:id', auth, ownsRow('properties'), async (req, res) => {
   const { error } = await supabase.from('properties').delete().eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
@@ -128,7 +162,7 @@ app.delete('/properties/:id', async (req, res) => {
 
 // ─── LEADS (real estate pipeline) ──────────────────────────────────────────────
 
-app.get('/leads', async (req, res) => {
+app.get('/leads', auth, ownQuery, async (req, res) => {
   const { vendor_id, stage } = req.query;
   let query = supabase.from('leads').select('*').order('last_contact_at', { ascending: false });
   if (vendor_id) query = query.eq('vendor_id', vendor_id);
@@ -138,7 +172,7 @@ app.get('/leads', async (req, res) => {
   res.json(data);
 });
 
-app.put('/leads/:id', async (req, res) => {
+app.put('/leads/:id', auth, ownsRow('leads'), async (req, res) => {
   const allowed = ['name','listing_type','property_type','budget_min','budget_max',
                     'preferred_area','bedrooms_wanted','timeline','notes','assigned_agent_id'];
   const patch = {};
@@ -148,7 +182,7 @@ app.put('/leads/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-app.put('/leads/:id/stage', async (req, res) => {
+app.put('/leads/:id/stage', auth, ownsRow('leads'), async (req, res) => {
   const { stage } = req.body;
   const valid = ['new','contacted','viewing_scheduled','offer_made','closed_won','closed_lost'];
   if (!valid.includes(stage)) return res.status(400).json({ error: 'Invalid stage' });
@@ -161,7 +195,7 @@ app.put('/leads/:id/stage', async (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/leads/pipeline-summary', async (req, res) => {
+app.get('/leads/pipeline-summary', auth, ownQuery, async (req, res) => {
   const { vendor_id } = req.query;
   try {
     let q = supabase.from('leads').select('stage');
@@ -175,7 +209,7 @@ app.get('/leads/pipeline-summary', async (req, res) => {
 
 // ─── VIEWINGS (real estate) ─────────────────────────────────────────────────────
 
-app.get('/viewings', async (req, res) => {
+app.get('/viewings', auth, ownQuery, async (req, res) => {
   const { vendor_id, status } = req.query;
   let query = supabase.from('viewings').select('*, leads(name, phone), properties(title, area, city)')
     .order('created_at', { ascending: false });
@@ -186,7 +220,7 @@ app.get('/viewings', async (req, res) => {
   res.json(data);
 });
 
-app.put('/viewings/:id/status', async (req, res) => {
+app.put('/viewings/:id/status', auth, ownsRow('viewings'), async (req, res) => {
   const { status } = req.body;
   const valid = ['requested','confirmed','completed','cancelled','no_show'];
   if (!valid.includes(status)) return res.status(400).json({ error: 'Invalid status' });
@@ -195,7 +229,7 @@ app.put('/viewings/:id/status', async (req, res) => {
   res.json({ success: true });
 });
 
-app.put('/viewings/:id', async (req, res) => {
+app.put('/viewings/:id', auth, ownsRow('viewings'), async (req, res) => {
   const allowed = ['requested_date','requested_time','notes'];
   const patch = {};
   for (const k of allowed) if (req.body[k] !== undefined) patch[k] = req.body[k];
@@ -208,12 +242,13 @@ app.put('/viewings/:id', async (req, res) => {
 
 app.post('/signup', async (req, res) => {
   const { name, business_name, email, whatsapp_number, business_type, about, password, country } = req.body;
+  if (!password || String(password).length < 6) return res.json({ success: false, error: 'Password must be at least 6 characters' });
   const { data: existing } = await supabase.from('vendors').select('id').eq('email', email).single();
   if (existing) return res.json({ success: false, error: 'Email already registered' });
   const { data, error } = await supabase
     .from('vendors')
     .insert([{
-      name, business_name, email, whatsapp_number, business_type, about, password,
+      name, business_name, email, whatsapp_number, business_type, about, password: await bcrypt.hash(String(password), 10),
       active: false, country: country || 'Nigeria', product_type: 'ecommerce'
     }])
     .select();
@@ -226,6 +261,7 @@ app.post('/signup', async (req, res) => {
 
 app.post('/signup-re', async (req, res) => {
   const { name, business_name, email, whatsapp_number, about, password, country } = req.body;
+  if (!password || String(password).length < 6) return res.json({ success: false, error: 'Password must be at least 6 characters' });
   const { data: existing } = await supabase.from('vendors').select('id').eq('email', email).single();
   if (existing) return res.json({ success: false, error: 'Email already registered' });
 
@@ -235,7 +271,7 @@ app.post('/signup-re', async (req, res) => {
     .from('vendors')
     .insert([{
       name, business_name, email, whatsapp_number,
-      business_type: 'real_estate_agent', about, password,
+      business_type: 'real_estate_agent', about, password: await bcrypt.hash(String(password), 10),
       active: false, country: country || 'Nigeria',
       product_type: 'real_estate', plan: 'trial',
       subscription_status: 'trialing', trial_ends_at
@@ -248,11 +284,20 @@ app.post('/signup-re', async (req, res) => {
 
 // ─── LOGIN (shared) ─────────────────────────────────────────────────────────────
 
-app.post('/login', async (req, res) => {
+app.post('/login', vendorLoginLimiter, async (req, res) => {
   const { email, password } = req.body;
-  const { data: vendor, error } = await supabase
-    .from('vendors').select('*').eq('email', email).eq('password', password).single();
-  if (error || !vendor) return res.json({ success: false, error: 'Invalid email or password' });
+  const { data: vendor } = await supabase.from('vendors').select('*').eq('email', email).single();
+  if (!vendor || !password) return res.json({ success: false, error: 'Invalid email or password' });
+
+  // Supports old plain text passwords and upgrades them to a hash on the first successful login
+  const stored = vendor.password || '';
+  const isHashed = stored.startsWith('$2');
+  const ok = isHashed ? await bcrypt.compare(String(password), stored) : stored === password;
+  if (!ok) return res.json({ success: false, error: 'Invalid email or password' });
+  if (!isHashed) {
+    const hash = await bcrypt.hash(String(password), 10);
+    await supabase.from('vendors').update({ password: hash }).eq('id', vendor.id);
+  }
   if (!vendor.active) return res.json({ success: false, error: 'Your account is pending approval. We will notify you within 48 hours.' });
   res.json({ success: true, vendor: {
     id: vendor.id, name: vendor.name, business_name: vendor.business_name,
@@ -260,13 +305,14 @@ app.post('/login', async (req, res) => {
     country: vendor.country || 'Nigeria', bot_instructions: vendor.bot_instructions || '',
     product_type: vendor.product_type || 'ecommerce',
     plan: vendor.plan || 'trial', subscription_status: vendor.subscription_status || 'trialing',
-    trial_ends_at: vendor.trial_ends_at || null
+    trial_ends_at: vendor.trial_ends_at || null,
+    token: jwt.sign({ role: 'vendor', vendor_id: vendor.id }, process.env.JWT_SECRET, { expiresIn: '30d' })
   }});
 });
 
 // ─── BOT TRAINING ───────────────────────────────────────────────────────────────
 
-app.put('/vendors/:id/bot-instructions', async (req, res) => {
+app.put('/vendors/:id/bot-instructions', auth, ownParam, async (req, res) => {
   const { bot_instructions } = req.body;
   const { error } = await supabase.from('vendors').update({ bot_instructions }).eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
@@ -288,13 +334,9 @@ app.post('/admin/login', loginLimiter, (req, res) => {
 });
 
 function requireAdmin(req, res, next) {
-  try {
-    const t = (req.headers.authorization || '').replace('Bearer ', '');
-    jwt.verify(t, process.env.JWT_SECRET);
-    next();
-  } catch {
-    res.status(401).json({ error: 'Unauthorized' });
-  }
+  const p = readToken(req);
+  if (!p || p.role !== 'admin') return res.status(401).json({ error: 'Unauthorized' });
+  next();
 }
 
 // Everything below this line under /admin needs a valid token
@@ -331,7 +373,7 @@ app.put('/admin/vendors/:id/activate-plan', async (req, res) => {
 
 // ─── WHATSAPP ───────────────────────────────────────────────────────────────────
 
-app.post('/vendors/:id/connect', async (req, res) => {
+app.post('/vendors/:id/connect', auth, ownParam, async (req, res) => {
   const vendorId = req.params.id;
   const { data: vendor, error } = await supabase.from('vendors').select('*').eq('id', vendorId).single();
   if (error || !vendor) return res.status(404).json({ error: 'Vendor not found' });
@@ -340,7 +382,7 @@ app.post('/vendors/:id/connect', async (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/vendors/:id/qr-image', (req, res) => {
+app.get('/vendors/:id/qr-image', auth, ownParam, (req, res) => {
   const qr = getQR(req.params.id);
   if (qr) {
     return res.json({
@@ -351,14 +393,14 @@ app.get('/vendors/:id/qr-image', (req, res) => {
   res.status(202).json({ status: 'not_ready' });
 });
 
-app.get('/vendors/:id/status', async (req, res) => {
+app.get('/vendors/:id/status', auth, ownParam, async (req, res) => {
   const { data: vendor } = await supabase.from('vendors')
     .select('whatsapp_connected, business_name, product_type, plan, subscription_status, trial_ends_at')
     .eq('id', req.params.id).single();
   res.json(vendor || { whatsapp_connected: false });
 });
 
-app.post('/vendors/:id/disconnect', async (req, res) => {
+app.post('/vendors/:id/disconnect', auth, ownParam, async (req, res) => {
   const { error } = await supabase.from('vendors').update({ whatsapp_connected: false }).eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
@@ -366,7 +408,7 @@ app.post('/vendors/:id/disconnect', async (req, res) => {
 
 // ─── ORDERS (ecommerce) ─────────────────────────────────────────────────────────
 
-app.get('/orders', async (req, res) => {
+app.get('/orders', auth, ownQuery, async (req, res) => {
   const { vendor_id } = req.query;
   let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
   if (vendor_id) query = query.eq('vendor_id', vendor_id);
@@ -375,7 +417,7 @@ app.get('/orders', async (req, res) => {
   res.json(data);
 });
 
-app.get('/orders/stats', async (req, res) => {
+app.get('/orders/stats', auth, ownQuery, async (req, res) => {
   const { vendor_id } = req.query;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -388,7 +430,7 @@ app.get('/orders/stats', async (req, res) => {
   res.json({ orders_today, revenue_today });
 });
 
-app.put('/orders/:id/status', async (req, res) => {
+app.put('/orders/:id/status', auth, ownsRow('orders'), async (req, res) => {
   const { status } = req.body;
   const { error } = await supabase.from('orders').update({ status }).eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
@@ -397,7 +439,7 @@ app.put('/orders/:id/status', async (req, res) => {
 
 // ─── NOTIFICATIONS (shared) ──────────────────────────────────────────────────────
 
-app.get('/notifications', async (req, res) => {
+app.get('/notifications', auth, ownQuery, async (req, res) => {
   const { vendor_id } = req.query;
   let query = supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(20);
   if (vendor_id) query = query.eq('vendor_id', vendor_id);
@@ -407,7 +449,7 @@ app.get('/notifications', async (req, res) => {
 });
 
 // IMPORTANT: read-all must come BEFORE /:id/read
-app.put('/notifications/read-all', async (req, res) => {
+app.put('/notifications/read-all', auth, ownBody, async (req, res) => {
   const { vendor_id } = req.body;
   let query = supabase.from('notifications').update({ read: true });
   if (vendor_id) query = query.eq('vendor_id', vendor_id);
@@ -416,7 +458,7 @@ app.put('/notifications/read-all', async (req, res) => {
   res.json({ success: true });
 });
 
-app.put('/notifications/:id/read', async (req, res) => {
+app.put('/notifications/:id/read', auth, ownsRow('notifications'), async (req, res) => {
   const { error } = await supabase.from('notifications').update({ read: true }).eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
@@ -424,7 +466,7 @@ app.put('/notifications/:id/read', async (req, res) => {
 
 // ─── ANALYTICS (ecommerce) ───────────────────────────────────────────────────────
 
-app.get('/analytics/revenue', async (req, res) => {
+app.get('/analytics/revenue', auth, ownQuery, async (req, res) => {
   const { vendor_id } = req.query;
   const days = [];
   for (let i = 6; i >= 0; i--) {
@@ -447,7 +489,7 @@ app.get('/analytics/revenue', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/analytics/conversion', async (req, res) => {
+app.get('/analytics/conversion', auth, ownQuery, async (req, res) => {
   const { vendor_id } = req.query;
   const days = [];
   for (let i = 6; i >= 0; i--) {
@@ -471,7 +513,7 @@ app.get('/analytics/conversion', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/analytics/top-products', async (req, res) => {
+app.get('/analytics/top-products', auth, ownQuery, async (req, res) => {
   const { vendor_id } = req.query;
   try {
     let q = supabase.from('orders').select('items, total_price').neq('status','cancelled');
@@ -488,7 +530,7 @@ app.get('/analytics/top-products', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/analytics/order-status', async (req, res) => {
+app.get('/analytics/order-status', auth, ownQuery, async (req, res) => {
   const { vendor_id } = req.query;
   try {
     let q = supabase.from('orders').select('status');
@@ -500,7 +542,7 @@ app.get('/analytics/order-status', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/analytics/summary', async (req, res) => {
+app.get('/analytics/summary', auth, ownQuery, async (req, res) => {
   const { vendor_id } = req.query;
   try {
     let oq = supabase.from('orders').select('total_price, status').neq('status','cancelled');
@@ -517,7 +559,7 @@ app.get('/analytics/summary', async (req, res) => {
 
 // ─── ANALYTICS (real estate) ─────────────────────────────────────────────────────
 
-app.get('/analytics-re/summary', async (req, res) => {
+app.get('/analytics-re/summary', auth, ownQuery, async (req, res) => {
   const { vendor_id } = req.query;
   try {
     let lq = supabase.from('leads').select('id, stage');
@@ -541,7 +583,7 @@ app.get('/analytics-re/summary', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/analytics-re/leads-over-time', async (req, res) => {
+app.get('/analytics-re/leads-over-time', auth, ownQuery, async (req, res) => {
   const { vendor_id } = req.query;
   const days = [];
   for (let i = 6; i >= 0; i--) {

@@ -2,584 +2,460 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OrderFlow — Admin Panel</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Nexua Admin | OrderFlow</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root {
-  --bg:#080808;--surface:#111;--surface2:#181818;--surface3:#1F1F1F;
-  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
-  --text:#F2EEE8;--muted:#6B6560;
-  --accent:#25D366;--accent2:#1aad52;--accent-dim:rgba(37,211,102,0.1);
-  --orange:#FF6B35;--orange-dim:rgba(255,107,53,0.1);
-  --red:#FF4444;--red-dim:rgba(255,68,68,0.1);
-  --blue:#4A9EFF;--blue-dim:rgba(74,158,255,0.1);
-  --purple:#A78BFA;--purple-dim:rgba(167,139,250,0.1);
-  --gold:#F0C040;--gold-dim:rgba(240,192,64,0.1);
+:root{
+  --bg:#0F0F0F;--surface:#1A1A1A;--surface2:#222;
+  --border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.16);
+  --text:#F0EDE8;--muted:#888480;
+  --green:#25D366;--green-dim:rgba(37,211,102,.12);
+  --gold:#C9A66B;--gold-dim:rgba(201,166,107,.13);
+  --red:#FF4444;--red-dim:rgba(255,68,68,.1);
+  --orange:#FF6B35;--orange-dim:rgba(255,107,53,.12);
   --radius:12px;--radius-sm:8px;
 }
-*{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
+*{margin:0;padding:0;box-sizing:border-box}
+html{height:100%}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100%}
+button{font-family:inherit}
+:focus-visible{outline:2px solid var(--green);outline-offset:2px}
 
-/* LOGIN */
-.login-screen {
-  min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
-  background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(37,211,102,0.06) 0%, transparent 70%);
-}
-.login-card {
-  background:var(--surface);border:1px solid var(--border2);border-radius:20px;
-  padding:40px;width:100%;max-width:400px;
-}
-.login-logo {font-family:'Syne',sans-serif;font-weight:800;font-size:24px;color:var(--accent);margin-bottom:4px;}
-.login-sub {font-size:13px;color:var(--muted);margin-bottom:32px;}
-.form-row {margin-bottom:18px;}
-label {display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:7px;}
-input {width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s;}
-input:focus {border-color:var(--accent);}
-input::placeholder {color:var(--muted);}
-.login-btn {width:100%;background:var(--accent);color:#000;border:none;border-radius:var(--radius-sm);padding:13px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;margin-top:8px;}
-.login-btn:hover {background:var(--accent2);}
-.login-error {background:var(--red-dim);border:1px solid rgba(255,68,68,0.3);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:16px;display:none;}
+/* login */
+#login{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:300;padding:16px}
+.login-box{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:36px;width:360px;max-width:100%}
+.login-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:22px;margin-bottom:4px}
+.login-sub{font-size:13px;color:var(--muted);margin-bottom:24px}
+.login-error{background:var(--red-dim);border:1px solid var(--red);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:14px;display:none}
+label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+input[type=password]{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;color:var(--text);font-size:14px;outline:none;margin-bottom:14px}
+input:focus{border-color:var(--green)}
 
-/* SHELL */
-.shell {display:flex;min-height:100vh;}
+/* shell */
+.shell{display:none;min-height:100vh}
+.sidebar{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:24px 0;position:sticky;top:0;height:100vh}
+.side-logo{padding:0 20px 22px;border-bottom:1px solid var(--border)}
+.side-logo b{font-family:'Syne',sans-serif;font-weight:800;font-size:18px}
+.side-logo small{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+.nav{padding:16px 12px;flex:1}
+.nav-item{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border:0;background:transparent;border-radius:var(--radius-sm);cursor:pointer;color:var(--muted);font-size:13px;font-weight:500;margin-bottom:2px;text-align:left}
+.nav-item:hover{background:rgba(255,255,255,.04);color:var(--text)}
+.nav-item.active{background:var(--green-dim);color:var(--green)}
+.count{margin-left:auto;background:var(--orange);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px}
+.side-foot{padding:16px 20px;border-top:1px solid var(--border)}
+.main{flex:1;min-width:0}
+.topbar{padding:16px 28px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.page-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:700}
+.content{max-width:1180px;padding:24px 28px 48px}
+.page{display:none}.page.active{display:block}
 
-/* SIDEBAR */
-.sidebar {
-  width:220px;flex-shrink:0;background:var(--surface);
-  border-right:1px solid var(--border);
-  display:flex;flex-direction:column;padding:24px 0;
-  position:sticky;top:0;height:100vh;
-}
-.sidebar-logo {padding:0 20px 24px;border-bottom:1px solid var(--border);}
-.sidebar-logo-mark {font-family:'Syne',sans-serif;font-weight:800;font-size:18px;color:var(--accent);}
-.sidebar-logo-sub {font-size:10px;color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-top:2px;font-weight:600;}
-.nav {padding:16px 12px;flex:1;}
-.nav-item {
-  display:flex;align-items:center;gap:10px;padding:9px 12px;
-  border-radius:var(--radius-sm);cursor:pointer;color:var(--muted);
-  font-size:13px;font-weight:500;margin-bottom:2px;transition:all .15s;
-}
-.nav-item:hover {background:rgba(255,255,255,0.04);color:var(--text);}
-.nav-item.active {background:var(--accent-dim);color:var(--accent);}
-.nav-item .badge {
-  margin-left:auto;background:var(--red);color:white;
-  font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;
-}
-.sidebar-footer {padding:16px 20px;border-top:1px solid var(--border);}
-.admin-info {font-size:13px;font-weight:600;}
-.admin-role {font-size:11px;color:var(--accent);margin-top:2px;}
-.logout-btn {width:100%;background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px;color:var(--muted);font-size:12px;cursor:pointer;margin-top:12px;font-family:'DM Sans',sans-serif;transition:all .15s;}
-.logout-btn:hover {border-color:var(--red);color:var(--red);}
+/* tabs and pills */
+.tabs,.pills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.tab,.pill{padding:8px 16px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted)}
+.pill{padding:5px 14px;font-size:12px;font-weight:500}
+.tab:hover,.pill:hover{color:var(--text)}
+.tab.active.ecom,.pill.active{background:var(--green-dim);border-color:var(--green);color:var(--green)}
+.tab.active.re{background:var(--gold-dim);border-color:var(--gold);color:var(--gold)}
+.tab.active.all{background:rgba(255,255,255,.08);border-color:var(--border2);color:var(--text)}
 
-/* MAIN */
-.main {flex:1;overflow-y:auto;}
-.topbar {
-  padding:18px 32px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-between;
-  background:var(--surface);position:sticky;top:0;z-index:50;
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}
+.stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px}
+.stat-value{font-family:'Syne',sans-serif;font-size:26px;font-weight:700;margin-top:6px}
+
+/* tables */
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
+.section-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700}
+.search{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 14px;color:var(--text);font-size:13px;width:240px;max-width:100%;outline:none}
+.search:focus{border-color:var(--green)}
+.table{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;margin-bottom:24px}
+.table-inner{min-width:820px}
+.thead,.row{display:grid;grid-template-columns:1.7fr 1fr .8fr 1fr 1fr 1fr 1.3fr;gap:8px;padding:13px 20px;align-items:center}
+.thead{background:var(--surface2);border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:600}
+.row{border-bottom:1px solid var(--border)}
+.row:last-child{border-bottom:0}
+.row:hover{background:rgba(255,255,255,.025)}
+.prod-grid .thead,.prod-grid .row{grid-template-columns:2fr 1.2fr 1fr 1fr 1fr}
+.vname{font-weight:600;font-size:13.5px;overflow-wrap:anywhere}
+.vsub{font-size:12px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
+.badge{display:inline-flex;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.b-active,.b-on{background:var(--green-dim);color:var(--green)}
+.b-pending{background:var(--orange-dim);color:var(--orange)}
+.b-trial,.b-re{background:var(--gold-dim);color:var(--gold)}
+.b-expired{background:var(--red-dim);color:var(--red)}
+.b-off{background:rgba(255,255,255,.06);color:var(--muted)}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+.btn{padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--text)}
+.btn:hover{background:var(--surface2)}
+.btn:disabled{opacity:.5;cursor:wait}
+.btn-approve{border-color:var(--green);color:var(--green)}.btn-approve:hover{background:var(--green-dim)}
+.btn-deactivate{border-color:var(--red);color:var(--red)}.btn-deactivate:hover{background:var(--red-dim)}
+.btn-plan{border-color:var(--gold);color:var(--gold)}.btn-plan:hover{background:var(--gold-dim)}
+.btn-wide{width:100%;padding:10px}
+.empty,.loading{text-align:center;padding:40px 20px;color:var(--muted);font-size:14px}
+
+/* modal + toast */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:200;display:none;align-items:center;justify-content:center;padding:16px}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:16px;width:500px;max-width:100%;max-height:90vh;overflow:auto}
+.modal-head{padding:18px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-family:'Syne',sans-serif;font-weight:700}
+.modal-body{padding:8px 24px 16px}
+.modal-foot{padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+.close{background:transparent;border:0;color:var(--muted);cursor:pointer;font-size:18px}
+.detail{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}
+.detail:last-child{border-bottom:0}
+.detail span:first-child{color:var(--muted)}
+.detail span:last-child{font-weight:500;text-align:right;max-width:62%;overflow-wrap:anywhere}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:1px solid var(--border2);border-left:3px solid var(--green);border-radius:var(--radius-sm);padding:12px 18px;font-size:13px;font-weight:500;z-index:400;transform:translateX(120%);transition:transform .3s;box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:90vw}
+.toast.show{transform:translateX(0)}
+.toast.err{border-left-color:var(--red)}
+
+@media (max-width:900px){
+  .shell{flex-direction:column}
+  .sidebar{width:100%;height:auto;position:static;flex-direction:row;align-items:center;padding:10px 12px;overflow-x:auto}
+  .side-logo,.side-foot{display:none}
+  .nav{display:flex;gap:4px;padding:0}
+  .nav-item{white-space:nowrap;width:auto;margin:0}
+  .stats{grid-template-columns:1fr 1fr}
+  .content{padding:20px 16px 48px}
+  .topbar{padding:14px 16px}
 }
-.page-title {font-family:'Syne',sans-serif;font-size:18px;font-weight:700;}
-.topbar-right {display:flex;align-items:center;gap:12px;}
-.refresh-btn {
-  background:transparent;border:1px solid var(--border2);border-radius:var(--radius-sm);
-  padding:7px 14px;color:var(--muted);font-size:13px;cursor:pointer;
-  font-family:'DM Sans',sans-serif;transition:all .15s;
-}
-.refresh-btn:hover {color:var(--text);border-color:rgba(255,255,255,0.25);}
-
-.content {padding:24px 32px;}
-
-/* PAGES */
-.page {display:none;}
-.page.active {display:block;}
-
-/* STATS */
-.stats {display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;}
-.stat-card {
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);padding:16px 18px;position:relative;overflow:hidden;
-}
-.stat-card::before {content:'';position:absolute;top:0;left:0;right:0;height:2px;}
-.stat-card.green::before {background:var(--accent);}
-.stat-card.orange::before {background:var(--orange);}
-.stat-card.blue::before {background:var(--blue);}
-.stat-card.red::before {background:var(--red);}
-.stat-label {font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;}
-.stat-value {font-family:'Syne',sans-serif;font-size:28px;font-weight:800;margin:6px 0 4px;}
-.stat-change {font-size:12px;color:var(--accent);}
-
-/* TABLE */
-.table-card {background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:24px;}
-.table-card-header {
-  padding:16px 20px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-between;
-}
-.table-card-title {font-family:'Syne',sans-serif;font-size:15px;font-weight:700;}
-.table-head {
-  display:grid;padding:10px 20px;
-  background:var(--surface2);border-bottom:1px solid var(--border);
-  font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:600;
-}
-.table-row {
-  display:grid;padding:14px 20px;
-  border-bottom:1px solid var(--border);align-items:center;
-  transition:background .12s;
-}
-.table-row:last-child {border-bottom:none;}
-.table-row:hover {background:rgba(255,255,255,0.02);}
-
-/* Vendors table columns */
-.vendors-grid {grid-template-columns:2fr 1.5fr 1fr 1fr 1fr 120px;}
-
-.vendor-info {display:flex;align-items:center;gap:10px;}
-.vendor-avatar {
-  width:36px;height:36px;border-radius:10px;
-  background:linear-gradient(135deg,#FF6B35,#FFB347);
-  display:flex;align-items:center;justify-content:center;
-  font-size:13px;font-weight:700;color:white;flex-shrink:0;
-}
-.vendor-name {font-weight:500;font-size:14px;}
-.vendor-email {font-size:12px;color:var(--muted);margin-top:1px;}
-
-.cell-sm {font-size:13px;color:var(--muted);}
-
-.badge {display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;}
-.badge-active {background:var(--accent-dim);color:var(--accent);}
-.badge-pending {background:var(--gold-dim);color:var(--gold);}
-.badge-inactive {background:rgba(255,255,255,0.05);color:var(--muted);}
-
-.action-btns {display:flex;gap:6px;}
-.action-btn {
-  padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;
-  cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:all .12s;
-}
-.action-btn.approve {background:var(--accent-dim);color:var(--accent);}
-.action-btn.approve:hover {background:var(--accent);color:#000;}
-.action-btn.deactivate {background:var(--red-dim);color:var(--red);}
-.action-btn.deactivate:hover {background:var(--red);color:white;}
-.action-btn.activate {background:var(--blue-dim);color:var(--blue);}
-.action-btn.activate:hover {background:var(--blue);color:white;}
-.action-btn.view {background:var(--surface2);color:var(--muted);}
-.action-btn.view:hover {color:var(--text);}
-
-.empty-state {text-align:center;padding:40px;color:var(--muted);font-size:14px;}
-
-/* FILTER TABS */
-.filter-tabs {display:flex;gap:8px;margin-bottom:16px;}
-.filter-tab {
-  padding:6px 16px;border-radius:20px;font-size:12px;font-weight:500;
-  cursor:pointer;border:1px solid var(--border);background:transparent;
-  color:var(--muted);transition:all .12s;font-family:'DM Sans',sans-serif;
-}
-.filter-tab:hover {color:var(--text);}
-.filter-tab.active {background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
-
-/* TOAST */
-.toast {
-  position:fixed;bottom:24px;right:24px;
-  background:var(--surface);border:1px solid var(--border2);
-  border-left:3px solid var(--accent);border-radius:var(--radius-sm);
-  padding:12px 18px;font-size:13px;font-weight:500;z-index:999;
-  transform:translateX(120%);transition:transform .3s cubic-bezier(.34,1.56,.64,1);
-  box-shadow:0 8px 24px rgba(0,0,0,.4);
-}
-.toast.show {transform:translateX(0);}
-
-/* MODAL */
-.modal-overlay {
-  position:fixed;inset:0;background:rgba(0,0,0,0.7);
-  backdrop-filter:blur(4px);z-index:200;
-  display:flex;align-items:center;justify-content:center;
-  opacity:0;pointer-events:none;transition:opacity .2s;
-}
-.modal-overlay.open {opacity:1;pointer-events:all;}
-.modal {
-  background:var(--surface);border:1px solid var(--border2);
-  border-radius:16px;width:500px;max-width:90vw;
-  transform:translateY(16px);transition:transform .2s;
-}
-.modal-overlay.open .modal {transform:translateY(0);}
-.modal-header {
-  padding:20px 24px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-between;
-}
-.modal-title {font-family:'Syne',sans-serif;font-size:16px;font-weight:700;}
-.modal-close {background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:18px;}
-.modal-body {padding:24px;}
-.modal-footer {padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
-.modal-btn {
-  padding:9px 18px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;
-  cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:all .15s;
-}
-.modal-btn.primary {background:var(--accent);color:#000;}
-.modal-btn.ghost {background:transparent;border:1px solid var(--border2);color:var(--muted);}
-
-.detail-row {display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px;}
-.detail-row:last-child {border-bottom:none;}
-.detail-label {color:var(--muted);}
-.detail-value {font-weight:500;text-align:right;max-width:60%;}
-
-@keyframes fadeUp {from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
 </style>
 </head>
 <body>
 
-<!-- LOGIN SCREEN -->
-<div id="login-screen" class="login-screen">
-  <div class="login-card">
-    <div class="login-logo">OrderFlow</div>
-    <div class="login-sub">Admin Panel — Restricted Access</div>
-    <div class="login-error" id="login-error"></div>
-    <div class="form-row">
-      <label>Admin Password</label>
-      <input type="password" id="admin-password" placeholder="Enter admin password" onkeydown="if(event.key==='Enter') adminLogin()">
-    </div>
-    <button class="login-btn" onclick="adminLogin()">Access Admin Panel →</button>
+<div id="login">
+  <div class="login-box">
+    <div class="login-logo">Nexua Admin</div>
+    <div class="login-sub">Internal access only</div>
+    <div class="login-error" id="login-error" role="alert"></div>
+    <label for="admin-pass">Admin password</label>
+    <input type="password" id="admin-pass" placeholder="Enter password" autocomplete="current-password">
+    <button class="btn btn-approve btn-wide" id="login-btn" onclick="doLogin()">Sign in</button>
   </div>
 </div>
 
-<!-- ADMIN SHELL -->
-<div class="shell" id="admin-shell" style="display:none">
+<div class="shell" id="shell">
   <aside class="sidebar">
-    <div class="sidebar-logo">
-      <div class="sidebar-logo-mark">OrderFlow</div>
-      <div class="sidebar-logo-sub">Admin Panel</div>
-    </div>
+    <div class="side-logo"><b>Nexua Admin</b><small>OrderFlow and OrderFlow RE</small></div>
     <nav class="nav">
-      <div class="nav-item active" onclick="showPage('overview', this)">📊 Overview</div>
-      <div class="nav-item" onclick="showPage('vendors', this)" id="vendors-nav">
-        👥 Vendors
-        <span class="badge" id="pending-badge" style="display:none">0</span>
-      </div>
-      <div class="nav-item" onclick="showPage('pending', this)" id="pending-nav">
-        ⏳ Pending Approval
-        <span class="badge" id="pending-badge2" style="display:none">0</span>
-      </div>
-      <div class="nav-item" onclick="showPage('products', this)">📦 All Products</div>
+      <button class="nav-item active" data-page="overview" onclick="showPage('overview',this)">📊 Overview</button>
+      <button class="nav-item" data-page="vendors" onclick="showPage('vendors',this)">👥 Vendors</button>
+      <button class="nav-item" data-page="pending" onclick="showPage('pending',this)">⏳ Pending approval <span class="count" id="pending-count" style="display:none">0</span></button>
+      <button class="nav-item" data-page="products" onclick="showPage('products',this)">📦 All products</button>
     </nav>
-    <div class="sidebar-footer">
-      <div class="admin-info">EMJO Admin</div>
-      <div class="admin-role">Platform Owner</div>
-      <button class="logout-btn" onclick="adminLogout()">Sign out</button>
-    </div>
+    <div class="side-foot"><button class="btn btn-wide" onclick="logout()">Sign out</button></div>
   </aside>
 
   <div class="main">
     <div class="topbar">
       <div class="page-title" id="page-title">Overview</div>
-      <div class="topbar-right">
-        <button class="refresh-btn" onclick="loadAllData()">↻ Refresh</button>
-      </div>
+      <button class="btn" onclick="loadAll()">↻ Refresh</button>
     </div>
 
     <div class="content">
+      <div class="tabs" id="product-tabs">
+        <button class="tab active ecom" onclick="setProduct('ecommerce',this)">🛍️ OrderFlow (Ecommerce)</button>
+        <button class="tab re" onclick="setProduct('real_estate',this)">🏠 OrderFlow RE (Real Estate)</button>
+        <button class="tab all" onclick="setProduct('all',this)">All vendors</button>
+      </div>
 
-      <!-- OVERVIEW PAGE -->
+      <div class="stats">
+        <div class="stat"><div class="stat-label">Total</div><div class="stat-value" id="s-total">0</div></div>
+        <div class="stat"><div class="stat-label">Pending approval</div><div class="stat-value" id="s-pending">0</div></div>
+        <div class="stat"><div class="stat-label">Active</div><div class="stat-value" id="s-active">0</div></div>
+        <div class="stat"><div class="stat-label">WhatsApp connected</div><div class="stat-value" id="s-connected">0</div></div>
+      </div>
+
+      <!-- Overview -->
       <div class="page active" id="page-overview">
-        <div class="stats">
-          <div class="stat-card green">
-            <div class="stat-label">Total Vendors</div>
-            <div class="stat-value" id="ov-total">—</div>
-            <div class="stat-change">Registered</div>
-          </div>
-          <div class="stat-card orange">
-            <div class="stat-label">Active Vendors</div>
-            <div class="stat-value" id="ov-active">—</div>
-            <div class="stat-change">Paying customers</div>
-          </div>
-          <div class="stat-card blue">
-            <div class="stat-label">Pending Approval</div>
-            <div class="stat-value" id="ov-pending">—</div>
-            <div class="stat-change">Need your action</div>
-          </div>
-          <div class="stat-card red">
-            <div class="stat-label">Total Products</div>
-            <div class="stat-value" id="ov-products">—</div>
-            <div class="stat-change">Across all vendors</div>
-          </div>
-        </div>
-
-        <!-- Recent signups -->
-        <div class="table-card">
-          <div class="table-card-header">
-            <div class="table-card-title">Recent Signups</div>
-          </div>
-          <div class="table-head vendors-grid">
-            <div>Vendor</div><div>Business Type</div><div>Country</div><div>Signed up</div><div>Status</div><div>Actions</div>
-          </div>
-          <div id="recent-list"><div class="empty-state">Loading...</div></div>
-        </div>
+        <div class="section-header"><div class="section-title">Recent signups</div></div>
+        <div class="table"><div class="table-inner">
+          <div class="thead"><div>Vendor</div><div>Product</div><div>Plan</div><div>Status</div><div>WhatsApp</div><div>Joined</div><div>Actions</div></div>
+          <div id="recent-list"><div class="loading">Loading vendors...</div></div>
+        </div></div>
       </div>
 
-      <!-- VENDORS PAGE -->
+      <!-- Vendors -->
       <div class="page" id="page-vendors">
-        <div class="filter-tabs">
-          <button class="filter-tab active" onclick="filterVendors('all', this)">All</button>
-          <button class="filter-tab" onclick="filterVendors('active', this)">Active</button>
-          <button class="filter-tab" onclick="filterVendors('pending', this)">Pending</button>
-          <button class="filter-tab" onclick="filterVendors('inactive', this)">Inactive</button>
+        <div class="section-header">
+          <div class="section-title">Vendors</div>
+          <input class="search" type="text" placeholder="Search by name or email..." aria-label="Search vendors" oninput="setSearch(this.value)">
         </div>
-        <div class="table-card">
-          <div class="table-card-header">
-            <div class="table-card-title">All Vendors</div>
-          </div>
-          <div class="table-head vendors-grid">
-            <div>Vendor</div><div>Business Type</div><div>WhatsApp</div><div>Joined</div><div>Status</div><div>Actions</div>
-          </div>
-          <div id="vendors-list"><div class="empty-state">Loading...</div></div>
+        <div class="pills" id="status-pills">
+          <button class="pill active" onclick="setStatus('all',this)">All</button>
+          <button class="pill" onclick="setStatus('pending',this)">Pending</button>
+          <button class="pill" onclick="setStatus('active',this)">Active</button>
+          <button class="pill" onclick="setStatus('trial',this)">On trial</button>
+          <button class="pill" onclick="setStatus('expired',this)">Expired</button>
         </div>
+        <div class="table"><div class="table-inner">
+          <div class="thead"><div>Vendor</div><div>Product</div><div>Plan</div><div>Status</div><div>WhatsApp</div><div>Joined</div><div>Actions</div></div>
+          <div id="vendors-list"><div class="loading">Loading vendors...</div></div>
+        </div></div>
       </div>
 
-      <!-- PENDING PAGE -->
+      <!-- Pending -->
       <div class="page" id="page-pending">
-        <div class="table-card">
-          <div class="table-card-header">
-            <div class="table-card-title">⏳ Pending Approval</div>
-          </div>
-          <div class="table-head vendors-grid">
-            <div>Vendor</div><div>Business Type</div><div>WhatsApp</div><div>Applied</div><div>Status</div><div>Actions</div>
-          </div>
-          <div id="pending-list"><div class="empty-state">Loading...</div></div>
-        </div>
+        <div class="section-header"><div class="section-title">Pending approval</div></div>
+        <div class="table"><div class="table-inner">
+          <div class="thead"><div>Vendor</div><div>Product</div><div>Plan</div><div>Status</div><div>WhatsApp</div><div>Applied</div><div>Actions</div></div>
+          <div id="pending-list"><div class="loading">Loading vendors...</div></div>
+        </div></div>
       </div>
 
-      <!-- PRODUCTS PAGE -->
+      <!-- Products -->
       <div class="page" id="page-products">
-        <div class="table-card">
-          <div class="table-card-header">
-            <div class="table-card-title">All Products</div>
-          </div>
-          <div class="table-head" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr">
-            <div>Product</div><div>Vendor</div><div>Price</div><div>Category</div><div>Status</div>
-          </div>
-          <div id="products-list"><div class="empty-state">Loading...</div></div>
-        </div>
+        <div class="section-header"><div class="section-title">All products</div></div>
+        <div class="table prod-grid"><div class="table-inner" style="min-width:640px">
+          <div class="thead"><div>Product</div><div>Vendor</div><div>Price</div><div>Category</div><div>Status</div></div>
+          <div id="products-list"><div class="loading">Loading products...</div></div>
+        </div></div>
       </div>
-
     </div>
   </div>
 </div>
 
-<!-- Vendor detail modal -->
-<div class="modal-overlay" id="vendor-modal">
+<div class="overlay" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
   <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">Vendor Details</div>
-      <button class="modal-close" onclick="closeModal()">✕</button>
-    </div>
+    <div class="modal-head"><span id="modal-title">Vendor details</span><button class="close" onclick="closeModal()" aria-label="Close">✕</button></div>
     <div class="modal-body" id="modal-body"></div>
-    <div class="modal-footer" id="modal-footer"></div>
+    <div class="modal-foot" id="modal-foot"></div>
   </div>
 </div>
-
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status"></div>
 
 <script>
 const API = 'https://rady-bot.onrender.com';
-const ADMIN_PASSWORD = 'Emmanuel@0108!';
-let allVendors = [];
-let allProducts = [];
-let vendorFilter = 'all';
+// Server auth: POST /admin/login {password} -> {token}. Every admin call then sends "Authorization: Bearer <token>".
+// Temporary fallback while the backend route is not built: put a password here for a client-side gate only.
+// It is visible in page source and does NOT protect the API. Leave '' once the server login exists.
+const LEGACY_LOCAL_PASSWORD = '';
 
-// LOGIN
-function adminLogin() {
-  const pw = document.getElementById('admin-password').value;
-  if (pw === ADMIN_PASSWORD) {
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('admin-shell').style.display = 'flex';
-    loadAllData();
-  } else {
-    const err = document.getElementById('login-error');
+let vendors = [], products = [];
+let productTab = 'ecommerce', statusFilter = 'all', searchTerm = '';
+let token = sessionStorage.getItem('nexua_token') || '';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ── API ─────────────────────────────────────────────
+async function api(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (opts.body) headers['Content-Type'] = 'application/json';
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(API + path, { ...opts, headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  if (res.status === 401 || res.status === 403) { logout(); throw new Error('Session expired. Sign in again.'); }
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok || (data && data.success === false)) throw new Error((data && data.error) || `Request failed (${res.status})`);
+  return data;
+}
+
+// ── AUTH ────────────────────────────────────────────
+async function doLogin() {
+  const pass = $('admin-pass').value;
+  const err = $('login-error'), btn = $('login-btn');
+  err.style.display = 'none';
+  if (!pass) return;
+  btn.disabled = true;
+  try {
+    if (LEGACY_LOCAL_PASSWORD) {
+      if (pass !== LEGACY_LOCAL_PASSWORD) throw new Error('Incorrect password');
+      token = '';
+      sessionStorage.setItem('nexua_admin', '1');
+    } else {
+      const data = await api('/admin/login', { method: 'POST', body: { password: pass } });
+      if (!data || !data.token) throw new Error('Login failed');
+      token = data.token;
+      sessionStorage.setItem('nexua_token', token);
+    }
+    showApp();
+  } catch (e) {
+    err.textContent = e.message === 'Failed to fetch' ? 'Cannot reach the server.' : e.message;
     err.style.display = 'block';
-    err.textContent = 'Incorrect password';
-  }
+  } finally { btn.disabled = false; }
 }
-
-function adminLogout() {
-  document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('admin-shell').style.display = 'none';
-  document.getElementById('admin-password').value = '';
+function logout() {
+  sessionStorage.removeItem('nexua_token'); sessionStorage.removeItem('nexua_admin');
+  token = ''; location.reload();
 }
+function showApp() {
+  $('login').style.display = 'none';
+  $('shell').style.display = 'flex';
+  loadAll();
+}
+$('admin-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+if (token || (LEGACY_LOCAL_PASSWORD && sessionStorage.getItem('nexua_admin') === '1')) showApp();
 
-// NAVIGATION
+// ── NAV / FILTERS ───────────────────────────────────
+const titles = { overview:'Overview', vendors:'All vendors', pending:'Pending approval', products:'All products' };
 function showPage(page, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-' + page).classList.add('active');
+  $('page-' + page).classList.add('active');
+  (el || document.querySelector(`[data-page="${page}"]`)).classList.add('active');
+  $('page-title').textContent = titles[page];
+}
+function setProduct(p, el) {
+  productTab = p;
+  document.querySelectorAll('#product-tabs .tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  const titles = { overview: 'Overview', vendors: 'All Vendors', pending: 'Pending Approval', products: 'All Products' };
-  document.getElementById('page-title').textContent = titles[page];
+  render();
 }
-
-// LOAD DATA
-async function loadAllData() {
-  try {
-    const [vRes, pRes] = await Promise.all([
-      fetch(`${API}/admin/vendors`),
-      fetch(`${API}/products`)
-    ]);
-    allVendors = await vRes.json();
-    allProducts = await pRes.json();
-  } catch(e) {
-    allVendors = [];
-    allProducts = [];
-  }
-  renderAll();
-}
-
-function renderAll() {
-  const pending = allVendors.filter(v => !v.active);
-  const active = allVendors.filter(v => v.active);
-
-  // Stats
-  document.getElementById('ov-total').textContent = allVendors.length;
-  document.getElementById('ov-active').textContent = active.length;
-  document.getElementById('ov-pending').textContent = pending.length;
-  document.getElementById('ov-products').textContent = allProducts.length;
-
-  // Pending badges
-  if (pending.length > 0) {
-    document.getElementById('pending-badge').style.display = 'inline';
-    document.getElementById('pending-badge').textContent = pending.length;
-    document.getElementById('pending-badge2').style.display = 'inline';
-    document.getElementById('pending-badge2').textContent = pending.length;
-  }
-
-  renderVendorTable('recent-list', allVendors.slice(0, 5));
-  renderVendorTable('vendors-list', filterVendorList());
-  renderVendorTable('pending-list', pending);
-  renderProductsTable();
-}
-
-function filterVendorList() {
-  if (vendorFilter === 'all') return allVendors;
-  if (vendorFilter === 'active') return allVendors.filter(v => v.active);
-  if (vendorFilter === 'pending') return allVendors.filter(v => !v.active);
-  if (vendorFilter === 'inactive') return allVendors.filter(v => !v.active);
-  return allVendors;
-}
-
-function filterVendors(f, el) {
-  vendorFilter = f;
-  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+function setStatus(s, el) {
+  statusFilter = s;
+  document.querySelectorAll('#status-pills .pill').forEach(p => p.classList.remove('active'));
   el.classList.add('active');
-  renderVendorTable('vendors-list', filterVendorList());
+  render();
 }
+function setSearch(v) { searchTerm = v.toLowerCase(); render(); }
 
-function renderVendorTable(containerId, vendors) {
-  const el = document.getElementById(containerId);
-  if (!vendors.length) {
-    el.innerHTML = '<div class="empty-state">No vendors found</div>';
-    return;
-  }
-  el.innerHTML = vendors.map(v => {
-    const initials = (v.business_name || v.name || '?').substring(0, 2).toUpperCase();
-    const date = v.created_at ? new Date(v.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short' }) : '—';
-    const statusBadge = v.active
-      ? '<span class="badge badge-active">Active</span>'
-      : '<span class="badge badge-pending">Pending</span>';
-    const actions = v.active
-      ? `<button class="action-btn view" onclick="viewVendor(${v.id})">View</button>
-         <button class="action-btn deactivate" onclick="toggleVendor(${v.id}, false)">Deactivate</button>`
-      : `<button class="action-btn approve" onclick="toggleVendor(${v.id}, true)">✓ Approve</button>
-         <button class="action-btn view" onclick="viewVendor(${v.id})">View</button>`;
-    return `
-      <div class="table-row vendors-grid">
-        <div class="vendor-info">
-          <div class="vendor-avatar">${initials}</div>
-          <div>
-            <div class="vendor-name">${v.business_name || 'Unknown'}</div>
-            <div class="vendor-email">${v.email || ''}</div>
-          </div>
-        </div>
-        <div class="cell-sm">${v.business_type || '—'}</div>
-        <div class="cell-sm">${v.whatsapp_number || '—'}</div>
-        <div class="cell-sm">${date}</div>
-        <div>${statusBadge}</div>
-        <div class="action-btns">${actions}</div>
-      </div>`;
-  }).join('');
-}
-
-function renderProductsTable() {
-  const el = document.getElementById('products-list');
-  if (!allProducts.length) {
-    el.innerHTML = '<div class="empty-state">No products yet</div>';
-    return;
-  }
-  el.innerHTML = allProducts.map(p => `
-    <div class="table-row" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr">
-      <div class="vendor-info">
-        <div style="font-size:22px;width:36px;text-align:center">${p.emoji || '📦'}</div>
-        <div>
-          <div class="vendor-name">${p.name}</div>
-          <div class="vendor-email">${p.description || ''}</div>
-        </div>
-      </div>
-      <div class="cell-sm">Vendor #${p.vendor_id || '—'}</div>
-      <div style="font-weight:600;font-size:14px">₦${Number(p.price).toLocaleString()}</div>
-      <div class="cell-sm">${p.category}</div>
-      <div><span class="badge ${p.active ? 'badge-active' : 'badge-inactive'}">${p.active ? 'Active' : 'Hidden'}</span></div>
-    </div>`).join('');
-}
-
-// APPROVE / DEACTIVATE
-async function toggleVendor(id, active) {
+// ── DATA ────────────────────────────────────────────
+async function loadAll() {
+  ['recent-list','vendors-list','pending-list','products-list'].forEach(id => $(id).innerHTML = '<div class="loading">Loading...</div>');
   try {
-    const res = await fetch(`${API}/admin/vendors/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ active })
-    });
-    const data = await res.json();
-    if (data.success) {
-      showToast(active ? '✓ Vendor approved and activated!' : 'Vendor deactivated');
-      loadAllData();
-    }
-  } catch(e) {
-    showToast('⚠️ Error. Check server connection.');
+    vendors = await api('/admin/vendors');
+  } catch (e) {
+    ['recent-list','vendors-list','pending-list'].forEach(id => $(id).innerHTML = `<div class="empty">⚠️ ${esc(e.message === 'Failed to fetch' ? 'Cannot reach the server.' : e.message)}</div>`);
+    vendors = [];
+  }
+  try { products = await api('/products'); } catch (e) { products = []; }
+  render();
+}
+
+function vendorStatus(v) {
+  if (!v.active) return 'pending';
+  if (v.subscription_status === 'active') return 'active';
+  if (!v.trial_ends_at) return 'active';
+  return new Date(v.trial_ends_at) < new Date() ? 'expired' : 'trial';
+}
+const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+const fmtDate = d => d ? new Date(d).toLocaleDateString('en-GB', { day:'numeric', month:'short' }) : '-';
+
+function rowHTML(v) {
+  const st = vendorStatus(v), isRE = v.product_type === 'real_estate';
+  const stBadge = { pending:'b-pending', trial:'b-trial', expired:'b-expired', active:'b-active' }[st];
+  const btns = (v.active
+    ? `<button class="btn btn-deactivate" onclick="toggleVendor(${+v.id},false,this)">Deactivate</button>`
+    : `<button class="btn btn-approve" onclick="toggleVendor(${+v.id},true,this)">Approve</button>`)
+    + `<button class="btn" onclick="viewVendor(${+v.id})">View</button>`
+    + (isRE ? `<button class="btn btn-plan" onclick="activatePlan(${+v.id},this)">Activate plan</button>` : '');
+  return `<div class="row">
+    <div><div class="vname">${esc(v.business_name || 'Unnamed')}</div><div class="vsub">${esc(v.email)}</div></div>
+    <div><span class="badge ${isRE ? 'b-re' : 'b-on'}">${isRE ? '🏠 Real estate' : '🛍️ Ecommerce'}</span></div>
+    <div class="vsub">${esc(cap(v.plan || 'trial'))}</div>
+    <div><span class="badge ${stBadge}">${cap(st)}</span></div>
+    <div><span class="badge ${v.whatsapp_connected ? 'b-on' : 'b-off'}">${v.whatsapp_connected ? 'Connected' : 'Not connected'}</span></div>
+    <div class="vsub">${fmtDate(v.created_at)}</div>
+    <div class="actions">${btns}</div></div>`;
+}
+function fill(id, list, emptyMsg) {
+  $(id).innerHTML = list.length ? list.map(rowHTML).join('') : `<div class="empty">${emptyMsg}</div>`;
+}
+
+function render() {
+  const scoped = vendors.filter(v => productTab === 'all' || (v.product_type || 'ecommerce') === productTab);
+  const pending = scoped.filter(v => !v.active);
+
+  $('s-total').textContent = scoped.length;
+  $('s-pending').textContent = pending.length;
+  $('s-active').textContent = scoped.filter(v => v.active).length;
+  $('s-connected').textContent = scoped.filter(v => v.whatsapp_connected).length;
+  const pc = $('pending-count');
+  pc.style.display = pending.length ? 'inline' : 'none';
+  pc.textContent = pending.length;
+
+  let list = scoped.filter(v =>
+    (v.business_name || '').toLowerCase().includes(searchTerm) || (v.email || '').toLowerCase().includes(searchTerm));
+  if (statusFilter !== 'all') list = list.filter(v => vendorStatus(v) === statusFilter);
+
+  fill('recent-list', scoped.slice(0, 5), 'No vendors yet. New signups will appear here.');
+  fill('vendors-list', list, 'No vendors match this view.');
+  fill('pending-list', pending, 'Nothing waiting for approval.');
+  renderProducts(scoped);
+}
+
+function renderProducts(scoped) {
+  const ids = new Set(scoped.map(v => v.id));
+  const names = Object.fromEntries(vendors.map(v => [v.id, v.business_name]));
+  const list = products.filter(p => productTab === 'all' || ids.has(p.vendor_id));
+  $('products-list').innerHTML = list.length ? list.map(p => `<div class="row">
+    <div><div class="vname">${esc(p.emoji || '📦')} ${esc(p.name)}</div><div class="vsub">${esc(p.description)}</div></div>
+    <div class="vsub">${esc(names[p.vendor_id] || 'Vendor #' + (p.vendor_id ?? '-'))}</div>
+    <div style="font-weight:600">₦${Number(p.price || 0).toLocaleString()}</div>
+    <div class="vsub">${esc(p.category || '-')}</div>
+    <div><span class="badge ${p.active ? 'b-active' : 'b-off'}">${p.active ? 'Active' : 'Hidden'}</span></div></div>`).join('')
+    : '<div class="empty">No products for this view.</div>';
+}
+
+// ── ACTIONS ─────────────────────────────────────────
+async function toggleVendor(id, active, btn) {
+  if (!active && !confirm('Deactivate this vendor? Their bot will stop responding.')) return;
+  if (btn) btn.disabled = true;
+  try {
+    await api(`/admin/vendors/${id}`, { method:'PUT', body:{ active } });
+    toast(active ? '✓ Vendor approved' : '✓ Vendor deactivated');
+    await loadAll();
+  } catch (e) {
+    toast('⚠️ ' + e.message, true);
+    if (btn) btn.disabled = false;
   }
 }
 
-// VIEW VENDOR DETAIL
+async function activatePlan(id, btn) {
+  const input = prompt('Activate which plan? Type "pro" or "enterprise". This confirms the bank transfer was received and sets a 30-day period.');
+  const plan = (input || '').trim().toLowerCase();
+  if (!['pro','enterprise'].includes(plan)) return;
+  if (btn) btn.disabled = true;
+  try {
+    await api(`/admin/vendors/${id}/activate-plan`, { method:'PUT', body:{ plan } });
+    toast(`✓ ${cap(plan)} plan activated for 30 days`);
+    await loadAll();
+  } catch (e) {
+    toast('⚠️ ' + e.message, true);
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ── DETAIL MODAL ────────────────────────────────────
 function viewVendor(id) {
-  const v = allVendors.find(x => x.id === id);
+  const v = vendors.find(x => x.id === id);
   if (!v) return;
-  const vendorProducts = allProducts.filter(p => p.vendor_id === id);
-  document.getElementById('modal-body').innerHTML = `
-    <div class="detail-row"><span class="detail-label">Business Name</span><span class="detail-value">${v.business_name || '—'}</span></div>
-    <div class="detail-row"><span class="detail-label">Owner Name</span><span class="detail-value">${v.name || '—'}</span></div>
-    <div class="detail-row"><span class="detail-label">Email</span><span class="detail-value">${v.email || '—'}</span></div>
-    <div class="detail-row"><span class="detail-label">WhatsApp</span><span class="detail-value">${v.whatsapp_number || '—'}</span></div>
-    <div class="detail-row"><span class="detail-label">Business Type</span><span class="detail-value">${v.business_type || '—'}</span></div>
-    <div class="detail-row"><span class="detail-label">About</span><span class="detail-value">${v.about || '—'}</span></div>
-    <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value">${v.active ? '✅ Active' : '⏳ Pending'}</span></div>
-    <div class="detail-row"><span class="detail-label">Products</span><span class="detail-value">${vendorProducts.length} products</span></div>
-    <div class="detail-row"><span class="detail-label">Joined</span><span class="detail-value">${v.created_at ? new Date(v.created_at).toLocaleDateString() : '—'}</span></div>
-  `;
-  document.getElementById('modal-footer').innerHTML = v.active
-    ? `<button class="modal-btn ghost" onclick="closeModal()">Close</button>
-       <button class="modal-btn primary" style="background:var(--red);color:white" onclick="toggleVendor(${v.id}, false);closeModal()">Deactivate</button>`
-    : `<button class="modal-btn ghost" onclick="closeModal()">Close</button>
-       <button class="modal-btn primary" onclick="toggleVendor(${v.id}, true);closeModal()">✓ Approve Vendor</button>`;
-  document.getElementById('vendor-modal').classList.add('open');
+  const st = vendorStatus(v), count = products.filter(p => p.vendor_id === id).length;
+  const row = (l, val) => `<div class="detail"><span>${l}</span><span>${esc(val || '-')}</span></div>`;
+  $('modal-body').innerHTML =
+    row('Business name', v.business_name) + row('Owner name', v.name) + row('Email', v.email) +
+    row('WhatsApp number', v.whatsapp_number) +
+    row('Product', v.product_type === 'real_estate' ? 'Real estate' : 'Ecommerce') +
+    row('Business type', v.business_type) + row('About', v.about) +
+    row('Plan', cap(v.plan || 'trial')) + row('Status', cap(st)) +
+    (v.trial_ends_at ? row('Trial ends', new Date(v.trial_ends_at).toLocaleDateString()) : '') +
+    row('WhatsApp', v.whatsapp_connected ? 'Connected' : 'Not connected') +
+    row('Products', count + ' products') +
+    row('Joined', v.created_at ? new Date(v.created_at).toLocaleDateString() : '');
+  $('modal-foot').innerHTML = `<button class="btn" onclick="closeModal()">Close</button>` +
+    (v.active
+      ? `<button class="btn btn-deactivate" onclick="closeModal();toggleVendor(${+v.id},false)">Deactivate</button>`
+      : `<button class="btn btn-approve" onclick="closeModal();toggleVendor(${+v.id},true)">Approve vendor</button>`);
+  $('modal').classList.add('open');
 }
+function closeModal() { $('modal').classList.remove('open'); }
+$('modal').addEventListener('click', e => { if (e.target === $('modal')) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-function closeModal() {
-  document.getElementById('vendor-modal').classList.remove('open');
-}
-
-function showToast(msg) {
-  const t = document.getElementById('toast');
+let toastTimer;
+function toast(msg, isErr) {
+  const t = $('toast');
   t.textContent = msg;
+  t.classList.toggle('err', !!isErr);
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3000);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
 }
-
-document.getElementById('vendor-modal').addEventListener('click', e => {
-  if (e.target === document.getElementById('vendor-modal')) closeModal();
-});
 </script>
 </body>
 </html>

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Start your free trial — OrderFlow RE</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#14161C; --surface:#1C1F27; --surface2:#242833;
+  --border:rgba(255,255,255,0.08); --border2:rgba(255,255,255,0.16);
+  --text:#F2EFE9; --muted:#8B8F9C;
+  --accent:#C9A66B; --accent2:#B8935A; --accent-dim:rgba(201,166,107,0.13);
+  --red:#FF6161; --red-dim:rgba(255,97,97,0.1);
+  --green:#5CC98A; --green-dim:rgba(92,201,138,0.12);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+body{background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);}
+h1,h2{font-family:'Fraunces',serif; font-weight:600;}
+a{color:var(--accent); text-decoration:none;}
+.shell{min-height:100vh; display:grid; grid-template-columns:1fr 1fr;}
+.side{background:var(--surface); border-right:1px solid var(--border); padding:56px 48px; display:flex; flex-direction:column; justify-content:space-between;}
+.brand{font-family:'Fraunces',serif; font-size:19px; font-weight:600;}
+.brand em{font-style:normal; color:var(--accent);}
+.side-copy h1{font-size:clamp(26px,2.6vw,34px); line-height:1.2; margin:26px 0 16px; max-width:380px;}
+.side-copy p{color:var(--muted); font-size:14.5px; line-height:1.6; max-width:360px;}
+.side-list{margin-top:30px; display:flex; flex-direction:column; gap:14px;}
+.side-item{display:flex; gap:12px; align-items:flex-start; font-size:13.5px; color:var(--text);}
+.side-item .tick{width:20px; height:20px; border-radius:50%; background:var(--accent-dim); color:var(--accent);
+  display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; margin-top:1px;}
+.side-foot{font-size:12px; color:var(--muted);}
+
+.formside{display:flex; align-items:center; justify-content:center; padding:48px 28px;}
+.form-box{width:100%; max-width:420px;}
+.form-box h2{font-size:23px; margin-bottom:6px;}
+.form-sub{color:var(--muted); font-size:13.5px; margin-bottom:26px;}
+.form-row{margin-bottom:16px;}
+.form-row-2{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;}
+label{display:block; font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:7px;}
+input[type=text],input[type=email],input[type=password],select,textarea{
+  width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+  padding:11px 14px; color:var(--text); font-size:14px; font-family:'DM Sans',sans-serif; outline:none; transition:border-color .15s;}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);}
+input::placeholder,textarea::placeholder{color:var(--muted);}
+select option{background:var(--surface2);}
+textarea{resize:vertical; min-height:64px;}
+.hint{font-size:11.5px; color:var(--muted); margin-top:6px;}
+.btn{width:100%; padding:12.5px; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer;
+  border:none; font-family:'DM Sans',sans-serif; transition:all .15s;}
+.btn-gold{background:var(--accent); color:#14161C;}
+.btn-gold:hover{background:var(--accent2);}
+.btn-gold:disabled{opacity:.6; cursor:default;}
+.msg{border-radius:8px; padding:11px 14px; font-size:13px; margin-bottom:16px; display:none;}
+.msg.error{background:var(--red-dim); border:1px solid var(--red); color:var(--red); display:block;}
+.msg.success{background:var(--green-dim); border:1px solid var(--green); color:var(--green); display:block;}
+.form-foot{text-align:center; margin-top:20px; font-size:13px; color:var(--muted);}
+.success-box{text-align:center; padding:20px 0;}
+.success-box .big{font-size:40px; margin-bottom:14px;}
+.success-box h2{margin-bottom:10px;}
+.success-box p{color:var(--muted); font-size:14px; line-height:1.6; max-width:340px; margin:0 auto;}
+
+@media (max-width:880px){
+  .shell{grid-template-columns:1fr;}
+  .side{display:none;}
+  .formside{padding:40px 20px;}
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="side">
+    <div>
+      <div class="brand">OrderFlow <em>RE</em></div>
+      <div class="side-copy">
+        <h1>Set your bot up once. Let it work every night after.</h1>
+        <p>A 3-day free trial with everything unlocked — no card required.</p>
+      </div>
+      <div class="side-list">
+        <div class="side-item"><div class="tick">✓</div>Connect your existing WhatsApp number</div>
+        <div class="side-item"><div class="tick">✓</div>Add your listings in minutes</div>
+        <div class="side-item"><div class="tick">✓</div>AI qualifies and books viewings for you</div>
+        <div class="side-item"><div class="tick">✓</div>Every lead tracked in one pipeline</div>
+      </div>
+    </div>
+    <div class="side-foot">© OrderFlow RE by Nexua</div>
+  </aside>
+
+  <main class="formside">
+    <div class="form-box" id="form-view">
+      <h2>Start your free trial</h2>
+      <div class="form-sub">Takes about a minute. We'll review and approve your account shortly after.</div>
+      <div class="msg" id="form-msg"></div>
+
+      <form id="signup-form" onsubmit="return false;">
+        <div class="form-row-2">
+          <div><label>Your name</label><input type="text" id="f-name" placeholder="Adaeze Obi"></div>
+          <div><label>Agency / brand name</label><input type="text" id="f-business" placeholder="Obi Realty"></div>
+        </div>
+        <div class="form-row"><label>Email</label><input type="email" id="f-email" placeholder="you@example.com"></div>
+        <div class="form-row-2">
+          <div><label>WhatsApp number</label><input type="text" id="f-whatsapp" placeholder="+234 801 234 5678"></div>
+          <div><label>Country</label>
+            <select id="f-country">
+              <option>Nigeria</option><option>Ghana</option><option>Kenya</option>
+              <option>South Africa</option><option>UK</option><option>US</option>
+              <option>Germany</option><option>Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row"><label>Password</label><input type="password" id="f-password" placeholder="Create a password"></div>
+        <div class="form-row"><label>About your business (optional)</label><textarea id="f-about" placeholder="A few words about what you specialize in — rentals, sales, land, shortlets..."></textarea></div>
+        <button class="btn btn-gold" id="submit-btn" onclick="doSignup()">Start free trial</button>
+        <div class="hint" style="text-align:center;margin-top:14px;">By signing up you agree to be contacted about your trial and account status.</div>
+      </form>
+
+      <div class="form-foot">Already have an account? <a href="dashboard-re.html">Sign in</a></div>
+    </div>
+
+    <div class="form-box success-box" id="success-view" style="display:none;">
+      <div class="big">🏡</div>
+      <h2>You're almost in</h2>
+      <p>Your trial account has been created. We review new agent accounts shortly before activation — you'll be notified once you're approved and can sign in.</p>
+      <div class="form-foot" style="margin-top:24px;"><a href="re-landing.html">← Back to home</a></div>
+    </div>
+  </main>
+</div>
+
+<script>
+const API = 'https://rady-bot.onrender.com';
+
+function showMsg(text, type) {
+  const el = document.getElementById('form-msg');
+  el.textContent = text;
+  el.className = 'msg ' + type;
+}
+
+async function doSignup() {
+  const name       = document.getElementById('f-name').value.trim();
+  const business   = document.getElementById('f-business').value.trim();
+  const email      = document.getElementById('f-email').value.trim();
+  const whatsapp   = document.getElementById('f-whatsapp').value.trim();
+  const country    = document.getElementById('f-country').value;
+  const password   = document.getElementById('f-password').value;
+  const about      = document.getElementById('f-about').value.trim();
+
+  if (!name || !business || !email || !whatsapp || !password) {
+    showMsg('Please fill in all required fields.', 'error');
+    return;
+  }
+  if (password.length < 6) {
+    showMsg('Password should be at least 6 characters.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Creating your account...';
+
+  try {
+    const res = await fetch(`${API}/signup-re`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name, business_name: business, email,
+        whatsapp_number: whatsapp, country, password, about
+      })
+    });
+    const data = await res.json();
+
+    if (!data.success) {
+      showMsg(data.error || 'Something went wrong. Please try again.', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Start free trial';
+      return;
+    }
+
+    document.getElementById('form-view').style.display = 'none';
+    document.getElementById('success-view').style.display = 'block';
+  } catch (e) {
+    showMsg('Cannot reach the server. Please try again.', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Start free trial';
+  }
+}
+
+document.getElementById('signup-form').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); doSignup(); }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>OrderFlow RE — Agent Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#14161C; --surface:#1C1F27; --surface2:#242833;
+  --border:rgba(255,255,255,0.08); --border2:rgba(255,255,255,0.16);
+  --text:#F2EFE9; --muted:#8B8F9C;
+  --accent:#C9A66B; --accent2:#B8935A; --accent-dim:rgba(201,166,107,0.13);
+  --red:#FF6161; --red-dim:rgba(255,97,97,0.1);
+  --green:#5CC98A; --green-dim:rgba(92,201,138,0.12);
+  --blue:#6FA8DC; --blue-dim:rgba(111,168,220,0.12);
+  --orange:#E0A458; --orange-dim:rgba(224,164,88,0.12);
+  --radius:12px; --radius-sm:8px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; overflow-x:hidden;}
+h1,h2,h3,.font-serif{font-family:'Fraunces',serif;}
+.shell{display:flex; min-height:100vh;}
+.sidebar{width:240px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; padding:24px 0; position:sticky; top:0; height:100vh;}
+.logo{padding:0 20px 28px; border-bottom:1px solid var(--border);}
+.logo-mark{font-family:'Fraunces',serif; font-weight:700; font-size:19px;}
+.logo-mark em{font-style:normal; color:var(--accent);}
+.logo-sub{font-size:11px; color:var(--muted); margin-top:2px; text-transform:uppercase; letter-spacing:.5px;}
+.nav{padding:20px 12px; flex:1;}
+.nav-item{display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--radius-sm);
+  cursor:pointer; color:var(--muted); font-size:13.5px; font-weight:500; margin-bottom:2px; transition:all .15s; position:relative;}
+.nav-item:hover{background:rgba(255,255,255,0.04); color:var(--text);}
+.nav-item.active{background:var(--accent-dim); color:var(--accent);}
+.nav-badge{position:absolute; right:10px; top:50%; transform:translateY(-50%); background:var(--red); color:white;
+  font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:18px; text-align:center;}
+.sidebar-footer{padding:16px 20px; border-top:1px solid var(--border);}
+.vendor-card{display:flex; align-items:center; gap:10px;}
+.vendor-avatar{width:36px; height:36px; border-radius:10px; background:linear-gradient(135deg,#C9A66B,#8A6B3D);
+  display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; color:#14161C; flex-shrink:0;}
+.vendor-name{font-weight:600; font-size:13px;}
+.vendor-plan{font-size:11px; color:var(--accent); background:var(--accent-dim); padding:1px 6px; border-radius:4px; margin-top:2px; display:inline-block;}
+.logout-btn{margin-top:10px; width:100%; padding:7px; background:transparent; border:1px solid var(--border);
+  border-radius:var(--radius-sm); color:var(--muted); font-size:12px; cursor:pointer; font-family:'DM Sans',sans-serif; transition:all .15s;}
+.logout-btn:hover{border-color:var(--red); color:var(--red);}
+.main{flex:1; overflow-y:auto; min-width:0;}
+.topbar{padding:20px 32px; border-bottom:1px solid var(--border); display:flex; align-items:center;
+  justify-content:space-between; background:var(--surface); position:sticky; top:0; z-index:50; gap:12px;}
+.page-title{font-family:'Fraunces',serif; font-size:20px; font-weight:600; white-space:nowrap;}
+.topbar-actions{display:flex; gap:10px; align-items:center; flex-shrink:0;}
+.btn{padding:8px 16px; border-radius:var(--radius-sm); font-size:13px; font-weight:600; cursor:pointer; border:none;
+  font-family:'DM Sans',sans-serif; transition:all .15s; display:flex; align-items:center; gap:6px; white-space:nowrap;}
+.btn-primary{background:var(--accent); color:#14161C;}
+.btn-primary:hover{background:var(--accent2);}
+.btn-ghost{background:transparent; color:var(--muted); border:1px solid var(--border2);}
+.btn-ghost:hover{color:var(--text);}
+.mobile-menu-btn{display:none; width:36px; height:36px; border-radius:var(--radius-sm); border:1px solid var(--border2);
+  background:transparent; color:var(--text); align-items:center; justify-content:center; font-size:18px; cursor:pointer; flex-shrink:0;}
+.sidebar-backdrop{display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:150;}
+.sidebar-backdrop.open{display:block;}
+.notif-bell{position:relative; width:36px; height:36px; border-radius:var(--radius-sm); border:1px solid var(--border2);
+  background:transparent; color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px; transition:all .15s;}
+.notif-bell:hover{background:var(--surface2); color:var(--text);}
+.content{padding:28px 32px;}
+
+.trial-banner{background:var(--accent-dim); border:1px solid var(--line, rgba(201,166,107,0.3)); border-radius:var(--radius);
+  padding:12px 20px; margin-bottom:22px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:13px;}
+.trial-banner.expired{background:var(--red-dim); border-color:var(--red); color:var(--red);}
+.trial-banner b{color:var(--accent);}
+.trial-banner.expired b{color:var(--red);}
+
+.stats{display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px;}
+.stat-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; position:relative; overflow:hidden; min-width:0;}
+.stat-card::before{content:''; position:absolute; top:0; left:0; right:0; height:2px;}
+.stat-card.gold::before{background:var(--accent);}
+.stat-card.blue::before{background:var(--blue);}
+.stat-card.green::before{background:var(--green);}
+.stat-card.orange::before{background:var(--orange);}
+.stat-label{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.stat-value{font-family:'Fraunces',serif; font-size:25px; font-weight:600; margin:6px 0 4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.stat-change{font-size:12px; color:var(--accent);}
+
+.wa-banner{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px 24px; margin-bottom:24px;}
+.wa-banner.connected{border-left:3px solid var(--green);}
+.wa-banner.disconnected{border-left:3px solid var(--orange);}
+.wa-banner-inner{display:flex; align-items:center; justify-content:space-between; gap:16px;}
+.wa-banner-left{display:flex; align-items:center; gap:14px; min-width:0;}
+.wa-icon{font-size:32px; flex-shrink:0;}
+.wa-banner-title{font-weight:600; font-size:14px; margin-bottom:3px;}
+.wa-banner-sub{font-size:12px; color:var(--muted);}
+.wa-status-connected{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--green); font-weight:600; white-space:nowrap;}
+.wa-dot{width:8px; height:8px; background:var(--green); border-radius:50%; animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.85)}}
+.qr-section{margin-top:16px; padding-top:16px; border-top:1px solid var(--border); display:none;}
+.qr-section.open{display:block;}
+.qr-frame{display:flex; align-items:flex-start; gap:24px;}
+.qr-box{background:#fff; border-radius:12px; padding:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.qr-steps{flex:1; min-width:0;}
+.qr-step{display:flex; gap:10px; margin-bottom:12px; font-size:13px; line-height:1.5;}
+.qr-num{width:22px; height:22px; border-radius:50%; background:var(--accent-dim); color:var(--accent); display:flex;
+  align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; margin-top:1px;}
+.qr-loading{text-align:center; padding:40px; color:var(--muted); font-size:13px;}
+
+.section-header{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:10px; flex-wrap:wrap;}
+.section-title{font-family:'Fraunces',serif; font-size:16px; font-weight:600;}
+.search-input{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 14px;
+  color:var(--text); font-size:13px; font-family:'DM Sans',sans-serif; width:200px; outline:none; transition:border-color .15s;}
+.search-input:focus{border-color:var(--accent);}
+.filter-pills{display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;}
+.pill{padding:5px 14px; border-radius:20px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid var(--border);
+  background:transparent; color:var(--muted); transition:all .12s; white-space:nowrap;}
+.pill:hover{color:var(--text);}
+.pill.active{background:var(--accent-dim); border-color:var(--accent); color:var(--accent);}
+
+.data-table{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;}
+.table-head{display:grid; padding:12px 20px; background:var(--surface2); border-bottom:1px solid var(--border);
+  font-size:11px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); font-weight:600;}
+.data-row{display:grid; padding:14px 20px; border-bottom:1px solid var(--border); align-items:center; transition:background .12s;}
+.data-row:last-child{border-bottom:none;}
+.data-row:hover{background:rgba(255,255,255,0.025);}
+.row-title{font-weight:600; font-size:14px;}
+.row-sub{font-size:12px; color:var(--muted); margin-top:2px;}
+.price{font-weight:700; font-size:14px; color:var(--accent);}
+.badge{display:inline-flex; align-items:center; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; white-space:nowrap;}
+.badge-available{background:var(--green-dim); color:var(--green);}
+.badge-under_offer{background:var(--orange-dim); color:var(--orange);}
+.badge-sold,.badge-rented{background:rgba(255,255,255,0.06); color:var(--muted);}
+.actions{display:flex; gap:6px;}
+.icon-btn{width:30px; height:30px; border-radius:6px; border:1px solid var(--border); background:transparent; color:var(--muted);
+  cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:13px; transition:all .12s; flex-shrink:0;}
+.icon-btn:hover{background:var(--surface2); color:var(--text);}
+.icon-btn.delete:hover{background:var(--red-dim); color:var(--red);}
+.empty-state{text-align:center; padding:48px 20px; color:var(--muted);}
+.empty-icon{font-size:36px; margin-bottom:12px;}
+.empty-title{font-size:15px; font-weight:600; color:var(--text); margin-bottom:6px;}
+.loading{text-align:center; padding:40px; color:var(--muted); font-size:14px;}
+select.status-select{background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:5px 8px;
+  color:var(--text); font-size:11.5px; cursor:pointer;}
+
+.modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:200; display:flex;
+  align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; padding:16px;}
+.modal-overlay.open{opacity:1; pointer-events:all;}
+.modal{background:var(--surface); border:1px solid var(--border2); border-radius:16px; width:600px; max-width:100%;
+  max-height:90vh; overflow-y:auto; transform:translateY(16px); transition:transform .2s;}
+.modal-overlay.open .modal{transform:translateY(0);}
+.modal-header{padding:24px 28px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;}
+.modal-title{font-family:'Fraunces',serif; font-size:18px; font-weight:600;}
+.close-btn{width:32px; height:32px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--muted);
+  cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.close-btn:hover{background:var(--surface2); color:var(--text);}
+.modal-body{padding:24px 28px;}
+.form-row{margin-bottom:16px;}
+.form-row-2{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px;}
+.form-row-3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:16px;}
+label{display:block; font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:7px;}
+input[type=text],input[type=number],textarea,select{width:100%; background:var(--surface2); border:1px solid var(--border);
+  border-radius:var(--radius-sm); padding:10px 14px; color:var(--text); font-size:14px; font-family:'DM Sans',sans-serif; outline:none; transition:border-color .15s;}
+input:focus,textarea:focus,select:focus{border-color:var(--accent);}
+select option{background:var(--surface2);}
+textarea{resize:vertical; min-height:70px;}
+.toggle-row{display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-top:1px solid var(--border);}
+.toggle{width:42px; height:24px; background:var(--surface2); border-radius:12px; cursor:pointer; position:relative; transition:background .2s; border:1px solid var(--border2); flex-shrink:0;}
+.toggle.on{background:var(--accent); border-color:var(--accent);}
+.toggle-knob{width:18px; height:18px; background:white; border-radius:50%; position:absolute; top:2px; left:2px; transition:transform .2s;}
+.toggle.on .toggle-knob{transform:translateX(18px);}
+.modal-footer{padding:16px 28px 24px; display:flex; gap:10px; justify-content:flex-end;}
+
+.toast{position:fixed; bottom:24px; right:24px; background:var(--surface); border:1px solid var(--border2); border-left:3px solid var(--accent);
+  border-radius:var(--radius-sm); padding:12px 18px; font-size:13px; font-weight:500; z-index:999; transform:translateX(120%);
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1); box-shadow:0 8px 24px rgba(0,0,0,.4); max-width:90vw;}
+.toast.show{transform:translateX(0);}
+
+#login-gate{position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:999; padding:16px;}
+.login-box{background:var(--surface); border:1px solid var(--border2); border-radius:16px; padding:36px; width:380px; max-width:100%;}
+.login-logo{font-family:'Fraunces',serif; font-weight:700; font-size:23px; margin-bottom:4px;}
+.login-logo em{font-style:normal; color:var(--accent);}
+.login-sub{font-size:13px; color:var(--muted); margin-bottom:28px;}
+.login-error{background:var(--red-dim); border:1px solid var(--red); border-radius:var(--radius-sm); padding:10px 14px; font-size:13px; color:var(--red); margin-bottom:16px; display:none;}
+.login-foot{text-align:center; margin-top:18px; font-size:12.5px; color:var(--muted);}
+.login-foot a{color:var(--accent); text-decoration:none;}
+
+.training-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px; margin-bottom:20px;}
+.training-title{font-family:'Fraunces',serif; font-size:15px; font-weight:600; margin-bottom:6px;}
+.training-sub{font-size:13px; color:var(--muted); margin-bottom:16px; line-height:1.5;}
+.training-textarea{width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm);
+  padding:14px; color:var(--text); font-size:14px; font-family:'DM Sans',sans-serif; outline:none; transition:border-color .15s; resize:vertical; min-height:160px; line-height:1.6;}
+.training-textarea:focus{border-color:var(--accent);}
+.examples-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;}
+.example-chip{background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px;
+  font-size:12px; color:var(--muted); cursor:pointer; transition:all .12s; line-height:1.4;}
+.example-chip:hover{border-color:var(--accent); color:var(--text);}
+.example-chip strong{display:block; color:var(--text); font-size:11px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:3px;}
+
+.notif-empty{padding:32px; text-align:center; color:var(--muted); font-size:13px;}
+.notif-item{padding:14px 20px; border-bottom:1px solid var(--border); cursor:pointer; transition:background .12s; display:flex; gap:10px; align-items:flex-start;}
+.notif-item:hover{background:rgba(255,255,255,0.03);}
+.notif-item.unread{background:var(--accent-dim);}
+.notif-item:last-child{border-bottom:none;}
+.notif-icon{font-size:18px; flex-shrink:0; margin-top:1px;}
+.notif-content{flex:1; min-width:0;}
+.notif-msg{font-size:13px; line-height:1.5; color:var(--text);}
+.notif-time{font-size:11px; color:var(--muted); margin-top:3px;}
+.notif-unread-dot{width:7px; height:7px; background:var(--accent); border-radius:50%; flex-shrink:0; margin-top:5px;}
+
+.pipeline-board{display:flex; gap:14px; overflow-x:auto; padding-bottom:10px;}
+.pipe-col{flex:1; min-width:230px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px;}
+.pipe-col-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;}
+.pipe-col-head h4{font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); font-weight:600;}
+.pipe-count{background:var(--surface2); color:var(--muted); font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px;}
+.lead-card{background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px; cursor:pointer; transition:border-color .12s;}
+.lead-card:hover{border-color:var(--accent);}
+.lead-name{font-weight:600; font-size:13px; margin-bottom:3px;}
+.lead-meta{font-size:11.5px; color:var(--muted); line-height:1.5;}
+.pipe-empty{font-size:12px; color:var(--muted); padding:10px 4px;}
+
+.analytics-grid-2{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+
+@media (max-width: 860px){
+  .shell{flex-direction:column;}
+  .sidebar{position:fixed; top:0; left:0; height:100vh; z-index:200; transform:translateX(-100%); transition:transform .25s ease; box-shadow:2px 0 24px rgba(0,0,0,.5);}
+  .sidebar.open{transform:translateX(0);}
+  .main{width:100%;}
+  .topbar{padding:14px 16px; gap:10px;}
+  .mobile-menu-btn{display:flex;}
+  .page-title{font-size:17px;}
+  .topbar-actions .btn{padding:7px 12px; font-size:12px;}
+  .topbar-actions .btn .btn-label{display:none;}
+  .content{padding:16px;}
+  .stats{grid-template-columns:repeat(2,1fr); gap:10px;}
+  .stat-card{padding:14px;}
+  .stat-value{font-size:18px;}
+  .wa-banner-inner{flex-direction:column; align-items:flex-start; gap:14px;}
+  .wa-banner-left{width:100%;}
+  #wa-status-area{width:100%;}
+  #wa-status-area .btn{width:100%; justify-content:center;}
+  .qr-frame{flex-direction:column; align-items:center; text-align:left; gap:16px;}
+  .qr-box{width:100%; max-width:260px;}
+  .qr-box img{width:100%; height:auto;}
+  .section-header{flex-direction:column; align-items:flex-start; gap:10px;}
+  .search-input{width:100%;}
+  .data-table{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+  .table-head,.data-row{min-width:680px;}
+  .modal{width:100%; max-height:88vh;}
+  .modal-body{padding:18px;}
+  .form-row-2,.form-row-3{grid-template-columns:1fr; gap:14px;}
+  .analytics-grid-2{grid-template-columns:1fr;}
+  .toast{left:16px; right:16px; bottom:16px; max-width:none;}
+  .examples-grid{grid-template-columns:1fr;}
+  .pipeline-board{gap:10px;}
+}
+</style>
+</head>
+<body>
+
+<div id="login-gate">
+  <div class="login-box">
+    <div class="login-logo">OrderFlow <em>RE</em></div>
+    <div class="login-sub">Sign in to your agent dashboard</div>
+    <div class="login-error" id="login-error"></div>
+    <div class="form-row"><label>Email</label><input type="text" id="login-email" placeholder="you@example.com"></div>
+    <div class="form-row"><label>Password</label><input type="text" id="login-pass" placeholder="••••••••"></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;" onclick="doLogin()">Sign In</button>
+    <div class="login-foot">New here? <a href="signup-re.html">Start your free trial</a></div>
+  </div>
+</div>
+
+<div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeSidebar()"></div>
+
+<div class="shell" id="app" style="display:none;">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">OrderFlow <em>RE</em></div>
+      <div class="logo-sub">by Nexua</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active" onclick="showPage('properties',this)">🏠 Properties</div>
+      <div class="nav-item" onclick="showPage('leads',this)">📋 Leads</div>
+      <div class="nav-item" onclick="showPage('viewings',this)">📅 Viewings</div>
+      <div class="nav-item" onclick="showPage('whatsapp',this)">💬 WhatsApp</div>
+      <div class="nav-item" onclick="showPage('training',this)">🧠 Bot Training</div>
+      <div class="nav-item" onclick="showPage('notifications',this)" id="nav-notifications">
+        🔔 Notifications
+        <span class="nav-badge" id="notif-badge" style="display:none">0</span>
+      </div>
+      <div class="nav-item" onclick="showPage('analytics',this)">📊 Analytics</div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="vendor-card">
+        <div class="vendor-avatar" id="sidebar-avatar">A</div>
+        <div>
+          <div class="vendor-name" id="sidebar-name">Loading...</div>
+          <div class="vendor-plan" id="sidebar-plan">Trial</div>
+        </div>
+      </div>
+      <button class="logout-btn" onclick="logout()">Sign out</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+        <button class="mobile-menu-btn" onclick="toggleSidebar()" aria-label="Open menu">☰</button>
+        <div class="page-title" id="page-title">Properties</div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary" id="add-btn" onclick="openPropertyModal()">+ <span class="btn-label">Add Property</span></button>
+      </div>
+    </div>
+
+    <div id="trial-banner-wrap"></div>
+
+    <!-- PROPERTIES -->
+    <div class="content" id="page-properties">
+      <div class="stats">
+        <div class="stat-card gold"><div class="stat-label">Active Listings</div><div class="stat-value" id="stat-listings">0</div><div class="stat-change">Available now</div></div>
+        <div class="stat-card blue"><div class="stat-label">Total Leads</div><div class="stat-value" id="stat-leads">0</div><div class="stat-change">All time</div></div>
+        <div class="stat-card green"><div class="stat-label">Viewings Scheduled</div><div class="stat-value" id="stat-viewings">0</div><div class="stat-change">Upcoming &amp; past</div></div>
+        <div class="stat-card orange"><div class="stat-label">Closed Deals</div><div class="stat-value" id="stat-closed">0</div><div class="stat-change">Won</div></div>
+      </div>
+      <div class="section-header">
+        <div class="section-title">Your Listings</div>
+        <input class="search-input" type="text" placeholder="Search listings..." oninput="filterProperties(this.value)">
+      </div>
+      <div class="filter-pills" id="filter-pills"></div>
+      <div class="data-table">
+        <div class="table-head" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 80px;">
+          <div>Property</div><div>Price</div><div>Location</div><div>Beds/Baths</div><div>Status</div><div>Actions</div>
+        </div>
+        <div id="properties-list"><div class="loading">Loading listings...</div></div>
+      </div>
+    </div>
+
+    <!-- LEADS PIPELINE -->
+    <div class="content" id="page-leads" style="display:none;">
+      <div class="section-header"><div class="section-title">Lead Pipeline</div></div>
+      <div class="pipeline-board" id="pipeline-board"><div class="loading">Loading pipeline...</div></div>
+    </div>
+
+    <!-- VIEWINGS -->
+    <div class="content" id="page-viewings" style="display:none;">
+      <div class="section-header"><div class="section-title">Viewing Requests</div></div>
+      <div class="data-table">
+        <div class="table-head" style="grid-template-columns:1.4fr 1.4fr 1fr 1fr 110px;">
+          <div>Prospect</div><div>Property</div><div>Requested</div><div>Phone</div><div>Status</div>
+        </div>
+        <div id="viewings-list"><div class="loading">Loading viewings...</div></div>
+      </div>
+    </div>
+
+    <!-- WHATSAPP -->
+    <div class="content" id="page-whatsapp" style="display:none;">
+      <div class="wa-banner" id="wa-banner">
+        <div class="wa-banner-inner">
+          <div class="wa-banner-left">
+            <div class="wa-icon">💬</div>
+            <div>
+              <div class="wa-banner-title" id="wa-title">WhatsApp Bot</div>
+              <div class="wa-banner-sub" id="wa-sub">Check your connection status</div>
+            </div>
+          </div>
+          <div id="wa-status-area"></div>
+        </div>
+        <div class="qr-section" id="qr-section">
+          <div id="qr-content" class="qr-loading">Loading QR code...</div>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;">
+        <div class="section-title" style="margin-bottom:16px;">How it works</div>
+        <div class="qr-step"><div class="qr-num">1</div><div>Click <strong>Connect WhatsApp</strong> above and scan the QR with your WhatsApp number</div></div>
+        <div class="qr-step"><div class="qr-num">2</div><div>Your bot goes live instantly — prospects text your number and the AI qualifies and matches them to listings</div></div>
+        <div class="qr-step"><div class="qr-num">3</div><div>The bot only shows <strong>your listings</strong> — never invents a property or price</div></div>
+        <div class="qr-step"><div class="qr-num">4</div><div>Keep your phone connected to the internet so the bot stays online</div></div>
+      </div>
+    </div>
+
+    <!-- BOT TRAINING -->
+    <div class="content" id="page-training" style="display:none;">
+      <div class="training-card">
+        <div class="training-title">🧠 Train Your Bot</div>
+        <div class="training-sub">Tell your bot how to behave — your availability, commission policy, negotiation rules, or anything prospects frequently ask.</div>
+        <div class="examples-grid">
+          <div class="example-chip" onclick="addExample('I am unavailable every day from 1pm to 3pm. Let prospects know viewings cannot be booked in that window.')"><strong>⏰ Availability</strong>"Unavailable 1pm–3pm daily"</div>
+          <div class="example-chip" onclick="addExample('Viewings can only be booked between 9am and 5pm, Monday to Saturday.')"><strong>📅 Viewing Hours</strong>"9am–5pm, Mon–Sat"</div>
+          <div class="example-chip" onclick="addExample('We do not accept price negotiation over WhatsApp. Direct any negotiation requests to the agent.')"><strong>💰 Negotiation</strong>"No negotiation over WhatsApp"</div>
+          <div class="example-chip" onclick="addExample('Agency fee is 10% of one year rent, payable at lease signing.')"><strong>📄 Agency Fee</strong>"10% of annual rent"</div>
+          <div class="example-chip" onclick="addExample('We only handle verified listings with C of O or Governor\'s Consent.')"><strong>📜 Documents</strong>"Only verified title listings"</div>
+          <div class="example-chip" onclick="addExample('Always confirm the prospect\'s full name and preferred viewing time before booking.')"><strong>📋 Booking Rules</strong>"Confirm name &amp; time first"</div>
+        </div>
+        <label style="margin-bottom:8px;">Your Bot Instructions</label>
+        <textarea class="training-textarea" id="bot-instructions" placeholder="Examples:&#10;• Viewings only between 9am and 5pm, Mon–Sat.&#10;• No price negotiation over WhatsApp.&#10;• Agency fee is 10% of annual rent.&#10;• Only verified listings with proper title documents."></textarea>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;flex-wrap:wrap;gap:10px;">
+          <div style="font-size:12px;color:var(--muted);">Changes take effect on the next prospect message</div>
+          <button class="btn btn-primary" onclick="saveInstructions()">Save Instructions</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTIFICATIONS -->
+    <div class="content" id="page-notifications" style="display:none;">
+      <div class="section-header">
+        <div class="section-title">🔔 Notifications</div>
+        <button class="btn btn-ghost" onclick="markAllRead()">Mark all as read</button>
+      </div>
+      <div class="data-table">
+        <div id="notifications-list"><div class="loading">Loading notifications...</div></div>
+      </div>
+    </div>
+
+    <!-- ANALYTICS -->
+    <div class="content" id="page-analytics" style="display:none;">
+      <div class="stats" style="margin-bottom:24px;">
+        <div class="stat-card gold"><div class="stat-label">Total Leads</div><div class="stat-value" id="an-leads">0</div><div class="stat-change">All time</div></div>
+        <div class="stat-card blue"><div class="stat-label">Viewings</div><div class="stat-value" id="an-viewings">0</div><div class="stat-change">Scheduled</div></div>
+        <div class="stat-card green"><div class="stat-label">Deals Closed</div><div class="stat-value" id="an-closed">0</div><div class="stat-change">Won</div></div>
+        <div class="stat-card orange"><div class="stat-label">Conversion Rate</div><div class="stat-value" id="an-rate">0%</div><div class="stat-change">Leads → Closed</div></div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:20px;">
+        <div class="section-title" style="margin-bottom:16px;">📈 New Leads — Last 7 Days</div>
+        <canvas id="chart-leads" height="80"></canvas>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;">
+        <div class="section-title" style="margin-bottom:16px;">🗂️ Pipeline Breakdown</div>
+        <canvas id="chart-pipeline" height="140"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Property Modal -->
+<div class="modal-overlay" id="property-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="property-modal-title">Add New Property</div>
+      <button class="close-btn" onclick="closePropertyModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label>Title</label><input type="text" id="p-title" placeholder="e.g. 3 Bed Flat — Lekki Phase 1"></div>
+      <div class="form-row-3">
+        <div><label>Listing Type</label>
+          <select id="p-listing-type"><option value="sale">Sale</option><option value="rent">Rent</option><option value="shortlet">Shortlet</option></select>
+        </div>
+        <div><label>Property Type</label>
+          <select id="p-property-type"><option>Flat</option><option>Duplex</option><option>Bungalow</option><option>Terrace</option><option>Land</option><option>Commercial</option><option>Other</option></select>
+        </div>
+        <div><label>Status</label>
+          <select id="p-status"><option value="available">Available</option><option value="under_offer">Under Offer</option><option value="sold">Sold</option><option value="rented">Rented</option></select>
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div><label>Price (<span id="currency-label">₦</span>)</label><input type="number" id="p-price" placeholder="5200000"></div>
+        <div><label>Price Period (optional)</label><input type="text" id="p-price-period" placeholder="per year"></div>
+      </div>
+      <div class="form-row-3">
+        <div><label>Bedrooms</label><input type="number" id="p-bedrooms" placeholder="3"></div>
+        <div><label>Bathrooms</label><input type="number" id="p-bathrooms" placeholder="3"></div>
+        <div><label>Toilets</label><input type="number" id="p-toilets" placeholder="4"></div>
+      </div>
+      <div class="form-row-2">
+        <div><label>Land Size (optional)</label><input type="text" id="p-land-size" placeholder="500"></div>
+        <div><label>Unit</label><input type="text" id="p-land-unit" placeholder="sqm / plots / acres"></div>
+      </div>
+      <div class="form-row-3">
+        <div><label>Area</label><input type="text" id="p-area" placeholder="Lekki Phase 1"></div>
+        <div><label>City</label><input type="text" id="p-city" placeholder="Lagos"></div>
+        <div><label>State</label><input type="text" id="p-state" placeholder="Lagos"></div>
+      </div>
+      <div class="form-row"><label>Full Address (private — never shown to prospects)</label><input type="text" id="p-address" placeholder="Only shared once a viewing is confirmed"></div>
+      <div class="form-row"><label>Tenure</label><input type="text" id="p-tenure" placeholder="C of O, Governor's Consent, Deed of Assignment..."></div>
+      <div class="form-row"><label>Description</label><textarea id="p-description" placeholder="Short description for prospects"></textarea></div>
+      <div class="form-row"><label>Features (comma separated)</label><input type="text" id="p-features" placeholder="Serviced, Gated estate, 24hr power"></div>
+      <div class="toggle-row">
+        <div><div style="font-size:14px;font-weight:500">Show on WhatsApp</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Prospects will see this listing</div></div>
+        <div class="toggle on" id="p-toggle-active" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closePropertyModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProperty()">Save Property</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lead Detail Modal -->
+<div class="modal-overlay" id="lead-modal">
+  <div class="modal" style="width:480px;">
+    <div class="modal-header">
+      <div class="modal-title">Lead Details</div>
+      <button class="close-btn" onclick="closeLeadModal()">✕</button>
+    </div>
+    <div class="modal-body" id="lead-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeLeadModal()">Close</button>
+      <button class="btn btn-primary" onclick="saveLeadNotes()">Save Notes</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'https://rady-bot.onrender.com';
+let properties = [], leads = [], viewings = [];
+let editingPropertyId = null, activeLeadId = null;
+let currentCat = 'all', searchTerm = '';
+let vendor = null;
+let qrPolling = null, statusPoller = null;
+
+const CURRENCY_MAP = { 'Nigeria':'₦','Germany':'€','UK':'£','US':'$','Ghana':'GH₵','Kenya':'KSh','South Africa':'R','Other':'' };
+function getCurrency() { return CURRENCY_MAP[vendor?.country] || '₦'; }
+
+const STAGES = [
+  {key:'new', label:'New'},
+  {key:'contacted', label:'Contacted'},
+  {key:'viewing_scheduled', label:'Viewing Scheduled'},
+  {key:'offer_made', label:'Offer Made'},
+  {key:'closed_won', label:'Closed Won'},
+  {key:'closed_lost', label:'Closed Lost'}
+];
+
+// ── MOBILE SIDEBAR ──────────────────────────────────────────────────────────
+
+function toggleSidebar() { document.querySelector('.sidebar').classList.toggle('open'); document.getElementById('sidebar-backdrop').classList.toggle('open'); }
+function closeSidebar() { document.querySelector('.sidebar').classList.remove('open'); document.getElementById('sidebar-backdrop').classList.remove('open'); }
+
+// ── AUTH ─────────────────────────────────────────────────────────────────────
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value.trim();
+  if (!email || !pass) return showLoginError('Enter your email and password');
+  try {
+    const res  = await fetch(`${API}/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ email, password: pass }) });
+    const data = await res.json();
+    if (!data.success) return showLoginError(data.error);
+    if (data.vendor.product_type !== 'real_estate') return showLoginError('This account is not an OrderFlow RE account.');
+    vendor = data.vendor;
+    localStorage.setItem('rady_vendor_re', JSON.stringify(vendor));
+    initDashboard();
+  } catch(e) { showLoginError('Cannot reach server. Try again.'); }
+}
+
+function showLoginError(msg) { const el = document.getElementById('login-error'); el.textContent = msg; el.style.display = 'block'; }
+function logout() { localStorage.removeItem('rady_vendor_re'); location.reload(); }
+
+function initDashboard() {
+  document.getElementById('login-gate').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('sidebar-avatar').textContent = vendor.business_name?.charAt(0).toUpperCase() || 'A';
+  document.getElementById('sidebar-name').textContent = vendor.business_name;
+  document.getElementById('sidebar-plan').textContent = (vendor.plan || 'trial').charAt(0).toUpperCase() + (vendor.plan || 'trial').slice(1);
+  document.getElementById('currency-label').textContent = getCurrency();
+  if (vendor.bot_instructions) document.getElementById('bot-instructions').value = vendor.bot_instructions;
+
+  renderTrialBanner();
+  loadProperties();
+  loadPipelineSummary();
+  checkWAStatus();
+  loadNotificationCount();
+  setInterval(loadNotificationCount, 30000);
+
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => { if (window.innerWidth <= 860) closeSidebar(); });
+  });
+}
+
+function renderTrialBanner() {
+  const wrap = document.getElementById('trial-banner-wrap');
+  if (!vendor.trial_ends_at) { wrap.innerHTML = ''; return; }
+  const end = new Date(vendor.trial_ends_at);
+  const now = new Date();
+  const daysLeft = Math.ceil((end - now) / (1000*60*60*24));
+  if (vendor.subscription_status === 'active' && daysLeft > 0) {
+    wrap.innerHTML = `<div class="content" style="padding-bottom:0;"><div class="trial-banner">Your <b>${vendor.plan}</b> plan is active — renews in ${daysLeft} day${daysLeft!==1?'s':''}.</div></div>`;
+  } else if (daysLeft > 0) {
+    wrap.innerHTML = `<div class="content" style="padding-bottom:0;"><div class="trial-banner"><b>${daysLeft} day${daysLeft!==1?'s':''}</b> left on your free trial. Pay by bank transfer to activate a plan — contact support to complete activation.</div></div>`;
+  } else {
+    wrap.innerHTML = `<div class="content" style="padding-bottom:0;"><div class="trial-banner expired">Your trial has ended and the bot is paused. Activate a plan to bring your WhatsApp assistant back online.</div></div>`;
+  }
+}
+
+const saved = localStorage.getItem('rady_vendor_re');
+if (saved) { vendor = JSON.parse(saved); initDashboard(); }
+
+// ── NAVIGATION ───────────────────────────────────────────────────────────────
+
+function showPage(page, el) {
+  ['properties','leads','viewings','whatsapp','training','notifications','analytics'].forEach(p => {
+    document.getElementById(`page-${p}`).style.display = 'none';
+  });
+  document.getElementById(`page-${page}`).style.display = 'block';
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  const titles = {properties:'Properties',leads:'Lead Pipeline',viewings:'Viewings',whatsapp:'WhatsApp Bot',training:'Bot Training',notifications:'Notifications',analytics:'Analytics'};
+  document.getElementById('page-title').textContent = titles[page];
+  document.getElementById('add-btn').style.display = page === 'properties' ? 'flex' : 'none';
+  if (page === 'whatsapp') checkWAStatus();
+  if (page === 'leads') loadLeads();
+  if (page === 'viewings') loadViewings();
+  if (page === 'notifications') loadNotifications();
+  if (page === 'analytics') loadAnalytics();
+}
+
+// ── NOTIFICATIONS ────────────────────────────────────────────────────────────
+
+async function loadNotificationCount() {
+  if (!vendor) return;
+  try {
+    const res = await fetch(`${API}/notifications?vendor_id=${vendor.id}`);
+    const notifs = await res.json();
+    const unread = notifs.filter(n => !n.read).length;
+    const badge = document.getElementById('notif-badge');
+    if (unread > 0) { badge.textContent = unread > 9 ? '9+' : unread; badge.style.display = 'block'; }
+    else badge.style.display = 'none';
+  } catch(e) {}
+}
+
+function notifIcon(type) { return { order:'🛍️', handoff:'🙋', lead:'👤', viewing:'📅' }[type] || '🔔'; }
+
+async function loadNotifications() {
+  if (!vendor) return;
+  const list = document.getElementById('notifications-list');
+  try {
+    const res = await fetch(`${API}/notifications?vendor_id=${vendor.id}`);
+    const notifs = await res.json();
+    if (!notifs.length) { list.innerHTML = '<div class="notif-empty">No notifications yet.<br><small style="color:var(--muted)">New leads and viewing requests will appear here.</small></div>'; return; }
+    list.innerHTML = notifs.map(n => `
+      <div class="notif-item ${n.read ? '' : 'unread'}" onclick="markRead(${n.id}, this)">
+        <div class="notif-icon">${notifIcon(n.type)}</div>
+        <div class="notif-content"><div class="notif-msg">${n.message}</div><div class="notif-time">${timeAgo(n.created_at)}</div></div>
+        ${!n.read ? '<div class="notif-unread-dot"></div>' : ''}
+      </div>`).join('');
+    loadNotificationCount();
+  } catch(e) { list.innerHTML = '<div class="loading">⚠️ Cannot reach server.</div>'; }
+}
+
+async function markRead(id, el) {
+  try { await fetch(`${API}/notifications/${id}/read`, { method: 'PUT' }); el.classList.remove('unread'); const dot = el.querySelector('.notif-unread-dot'); if (dot) dot.remove(); loadNotificationCount(); } catch(e) {}
+}
+async function markAllRead() {
+  if (!vendor) return;
+  try { await fetch(`${API}/notifications/read-all`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ vendor_id: vendor.id }) }); loadNotifications(); showToast('✓ All notifications marked as read'); } catch(e) {}
+}
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+// ── BOT TRAINING ─────────────────────────────────────────────────────────────
+
+function addExample(text) { const ta = document.getElementById('bot-instructions'); ta.value = ta.value ? ta.value + '\n' + text : text; ta.focus(); }
+
+async function saveInstructions() {
+  const instructions = document.getElementById('bot-instructions').value.trim();
+  try {
+    const res  = await fetch(`${API}/vendors/${vendor.id}/bot-instructions`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ bot_instructions: instructions }) });
+    const data = await res.json();
+    if (data.success) { vendor.bot_instructions = instructions; localStorage.setItem('rady_vendor_re', JSON.stringify(vendor)); showToast('✅ Bot instructions saved!'); }
+  } catch(e) { showToast('⚠️ Could not save instructions.'); }
+}
+
+// ── WHATSAPP ─────────────────────────────────────────────────────────────────
+
+let waConnected = false;
+
+async function checkWAStatus() {
+  if (!vendor) return;
+  try { const res = await fetch(`${API}/vendors/${vendor.id}/status`); const data = await res.json(); waConnected = data.whatsapp_connected; renderWABanner(); } catch(e) { renderWABanner(); }
+}
+
+function renderWABanner() {
+  const banner = document.getElementById('wa-banner'), title = document.getElementById('wa-title'),
+        sub = document.getElementById('wa-sub'), statusArea = document.getElementById('wa-status-area');
+  if (waConnected) {
+    banner.className = 'wa-banner connected';
+    title.textContent = 'WhatsApp Bot — Connected';
+    sub.textContent = `Your bot is live on ${vendor.business_name}`;
+    statusArea.innerHTML = `<div class="wa-status-connected"><div class="wa-dot"></div> Live & Active</div>`;
+    document.getElementById('qr-section').classList.remove('open');
+    if (qrPolling) { clearInterval(qrPolling); qrPolling = null; }
+    if (statusPoller) { clearInterval(statusPoller); statusPoller = null; }
+  } else {
+    banner.className = 'wa-banner disconnected';
+    title.textContent = 'WhatsApp Bot — Not Connected';
+    sub.textContent = 'Connect your WhatsApp number to go live';
+    statusArea.innerHTML = `<button class="btn btn-primary" onclick="startQR()">📱 Connect WhatsApp</button>`;
+  }
+}
+
+async function startQR() {
+  if (qrPolling) { clearInterval(qrPolling); qrPolling = null; }
+  if (statusPoller) { clearInterval(statusPoller); statusPoller = null; }
+  const qrSection = document.getElementById('qr-section'), qrContent = document.getElementById('qr-content');
+  qrSection.classList.add('open');
+  const steps = ['⏳ Waking up server...','🔌 Connecting to WhatsApp...','📡 Setting up your bot...','🔑 Generating QR code...','⏳ Almost ready, hang tight...'];
+  let stepIndex = 0;
+  function showStep() { if (stepIndex < steps.length) { qrContent.innerHTML = `<div class="qr-loading">${steps[stepIndex]}<br><small style="color:var(--muted);margin-top:8px;display:block">This takes about 10 seconds</small></div>`; stepIndex++; } }
+  showStep();
+  const stepTimer = setInterval(showStep, 3000);
+  try { await fetch(`${API}/vendors/${vendor.id}/connect`, { method: 'POST' }); } catch(e) {}
+  let qrShown = false, qrAttempts = 0;
+  qrPolling = setInterval(async () => {
+    qrAttempts++;
+    try {
+      const res = await fetch(`${API}/vendors/${vendor.id}/qr-image`);
+      const data = await res.json();
+      if (data.status === 'ready' && data.url && !qrShown) {
+        qrShown = true; clearInterval(stepTimer);
+        qrContent.innerHTML = `
+          <div class="qr-frame">
+            <div class="qr-box"><img src="${data.url}" style="width:220px;height:220px;display:block;border-radius:8px;" alt="QR Code"/></div>
+            <div class="qr-steps">
+              <div class="qr-step"><div class="qr-num">1</div><div>Open WhatsApp on your phone</div></div>
+              <div class="qr-step"><div class="qr-num">2</div><div>Tap <strong>⋮ → Linked Devices → Link a Device</strong></div></div>
+              <div class="qr-step"><div class="qr-num">3</div><div>Point your camera at the QR code</div></div>
+              <div class="qr-step"><div class="qr-num">4</div><div>Your bot goes live instantly! 🎉</div></div>
+              <p style="font-size:11px;color:var(--muted);margin-top:12px;">QR expires in 60 seconds. Keep this page open.</p>
+            </div>
+          </div>`;
+      }
+    } catch(e) {}
+    if (qrAttempts > 60) { clearInterval(qrPolling); clearInterval(stepTimer); qrPolling = null; if (!qrShown) qrContent.innerHTML = '<div class="qr-loading">⚠️ Timed out.<br><button class="btn btn-ghost" onclick="startQR()" style="margin-top:12px">Try again</button></div>'; }
+  }, 2000);
+  statusPoller = setInterval(async () => {
+    try {
+      const res = await fetch(`${API}/vendors/${vendor.id}/status`);
+      const data = await res.json();
+      if (data.whatsapp_connected) {
+        waConnected = true; vendor.whatsapp_connected = true; localStorage.setItem('rady_vendor_re', JSON.stringify(vendor));
+        clearInterval(stepTimer); renderWABanner(); showToast('✅ WhatsApp connected!');
+      }
+    } catch(e) {}
+  }, 3000);
+}
+
+// ── PROPERTIES ───────────────────────────────────────────────────────────────
+
+async function loadProperties() {
+  if (!vendor) return;
+  try { const res = await fetch(`${API}/properties?vendor_id=${vendor.id}`); properties = await res.json(); renderProperties(); }
+  catch(e) { document.getElementById('properties-list').innerHTML = '<div class="loading">⚠️ Cannot reach server.</div>'; }
+  document.getElementById('stat-listings').textContent = properties.filter(p => p.status === 'available').length;
+}
+
+function renderProperties() {
+  const list = document.getElementById('properties-list');
+  const currency = getCurrency();
+  const existingTypes = [...new Set(properties.map(p => p.property_type).filter(Boolean))];
+  document.getElementById('filter-pills').innerHTML =
+    `<button class="pill ${currentCat==='all'?'active':''}" onclick="filterCat('all',this)">All</button>` +
+    existingTypes.map(t => `<button class="pill ${currentCat===t?'active':''}" onclick="filterCat('${t}',this)">${t}</button>`).join('');
+
+  const filtered = properties.filter(p => (currentCat === 'all' || p.property_type === currentCat) && p.title.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  list.innerHTML = filtered.length ? filtered.map(p => `
+    <div class="data-row" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 80px;">
+      <div><div class="row-title">${p.title}</div><div class="row-sub">${p.listing_type || ''} · ${p.property_type || ''}</div></div>
+      <div class="price">${currency}${Number(p.price).toLocaleString()}${p.price_period ? ' '+p.price_period : ''}</div>
+      <div class="row-sub">${[p.area,p.city].filter(Boolean).join(', ') || '—'}</div>
+      <div class="row-sub">${p.bedrooms||'—'} bed / ${p.bathrooms||'—'} bath</div>
+      <div><span class="badge badge-${p.status}">${(p.status||'available').replace('_',' ')}</span></div>
+      <div class="actions"><button class="icon-btn" onclick="editProperty(${p.id})">✏️</button><button class="icon-btn delete" onclick="deleteProperty(${p.id})">🗑</button></div>
+    </div>`).join('')
+  : '<div class="empty-state"><div class="empty-icon">🏠</div><div class="empty-title">No listings yet</div><div>Click + Add Property to get started</div></div>';
+}
+
+function filterCat(cat, el) { currentCat = cat; document.querySelectorAll('.pill').forEach(p => p.classList.remove('active')); el.classList.add('active'); renderProperties(); }
+function filterProperties(val) { searchTerm = val; renderProperties(); }
+
+function openPropertyModal() {
+  editingPropertyId = null;
+  document.getElementById('property-modal-title').textContent = 'Add New Property';
+  ['p-title','p-price','p-price-period','p-bedrooms','p-bathrooms','p-toilets','p-land-size','p-land-unit',
+   'p-area','p-city','p-state','p-address','p-tenure','p-description','p-features'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('p-listing-type').value = 'sale';
+  document.getElementById('p-property-type').value = 'Flat';
+  document.getElementById('p-status').value = 'available';
+  document.getElementById('p-toggle-active').classList.add('on');
+  document.getElementById('property-modal').classList.add('open');
+}
+
+function editProperty(id) {
+  const p = properties.find(x => x.id === id);
+  editingPropertyId = id;
+  document.getElementById('property-modal-title').textContent = 'Edit Property';
+  document.getElementById('p-title').value = p.title || '';
+  document.getElementById('p-listing-type').value = p.listing_type || 'sale';
+  document.getElementById('p-property-type').value = p.property_type || 'Flat';
+  document.getElementById('p-status').value = p.status || 'available';
+  document.getElementById('p-price').value = p.price || '';
+  document.getElementById('p-price-period').value = p.price_period || '';
+  document.getElementById('p-bedrooms').value = p.bedrooms || '';
+  document.getElementById('p-bathrooms').value = p.bathrooms || '';
+  document.getElementById('p-toilets').value = p.toilets || '';
+  document.getElementById('p-land-size').value = p.land_size || '';
+  document.getElementById('p-land-unit').value = p.land_size_unit || '';
+  document.getElementById('p-area').value = p.area || '';
+  document.getElementById('p-city').value = p.city || '';
+  document.getElementById('p-state').value = p.state || '';
+  document.getElementById('p-address').value = p.address_private || '';
+  document.getElementById('p-tenure').value = p.tenure || '';
+  document.getElementById('p-description').value = p.description || '';
+  document.getElementById('p-features').value = Array.isArray(p.features) ? p.features.join(', ') : '';
+  p.active !== false ? document.getElementById('p-toggle-active').classList.add('on') : document.getElementById('p-toggle-active').classList.remove('on');
+  document.getElementById('property-modal').classList.add('open');
+}
+
+function closePropertyModal() { document.getElementById('property-modal').classList.remove('open'); editingPropertyId = null; }
+
+async function saveProperty() {
+  const title = document.getElementById('p-title').value.trim();
+  const price = parseFloat(document.getElementById('p-price').value);
+  if (!title || !price) { showToast('⚠️ Fill in title and price'); return; }
+  const property = {
+    vendor_id: vendor.id,
+    title, listing_type: document.getElementById('p-listing-type').value, property_type: document.getElementById('p-property-type').value,
+    price, price_period: document.getElementById('p-price-period').value.trim(),
+    bedrooms: parseInt(document.getElementById('p-bedrooms').value) || null,
+    bathrooms: parseInt(document.getElementById('p-bathrooms').value) || null,
+    toilets: parseInt(document.getElementById('p-toilets').value) || null,
+    land_size: parseFloat(document.getElementById('p-land-size').value) || null,
+    land_size_unit: document.getElementById('p-land-unit').value.trim(),
+    area: document.getElementById('p-area').value.trim(), city: document.getElementById('p-city').value.trim(), state: document.getElementById('p-state').value.trim(),
+    address_private: document.getElementById('p-address').value.trim(), tenure: document.getElementById('p-tenure').value.trim(),
+    description: document.getElementById('p-description').value.trim(),
+    features: document.getElementById('p-features').value.split(',').map(s => s.trim()).filter(Boolean),
+    status: document.getElementById('p-status').value,
+    active: document.getElementById('p-toggle-active').classList.contains('on')
+  };
+  try {
+    if (editingPropertyId) { await fetch(`${API}/properties/${editingPropertyId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(property) }); showToast('✓ Property updated!'); }
+    else { await fetch(`${API}/properties`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(property) }); showToast('✓ Property added!'); }
+    closePropertyModal(); loadProperties();
+  } catch(e) { showToast('⚠️ Could not save.'); }
+}
+
+async function deleteProperty(id) {
+  if (!confirm('Remove this listing?')) return;
+  await fetch(`${API}/properties/${id}`, { method:'DELETE' });
+  showToast('Listing removed'); loadProperties();
+}
+
+// ── LEADS PIPELINE ───────────────────────────────────────────────────────────
+
+async function loadPipelineSummary() {
+  if (!vendor) return;
+  try {
+    const res = await fetch(`${API}/leads/pipeline-summary?vendor_id=${vendor.id}`);
+    const s = await res.json();
+    const total = Object.values(s).reduce((a,b) => a+b, 0);
+    document.getElementById('stat-leads').textContent = total;
+    document.getElementById('stat-viewings').textContent = s.viewing_scheduled || 0;
+    document.getElementById('stat-closed').textContent = s.closed_won || 0;
+  } catch(e) {}
+}
+
+async function loadLeads() {
+  if (!vendor) return;
+  const board = document.getElementById('pipeline-board');
+  try {
+    const res = await fetch(`${API}/leads?vendor_id=${vendor.id}`);
+    leads = await res.json();
+    renderPipeline();
+  } catch(e) { board.innerHTML = '<div class="loading">⚠️ Cannot reach server.</div>'; }
+}
+
+function renderPipeline() {
+  const board = document.getElementById('pipeline-board');
+  const currency = getCurrency();
+  board.innerHTML = STAGES.map(stage => {
+    const items = leads.filter(l => l.stage === stage.key);
+    return `
+      <div class="pipe-col">
+        <div class="pipe-col-head"><h4>${stage.label}</h4><span class="pipe-count">${items.length}</span></div>
+        ${items.length ? items.map(l => `
+          <div class="lead-card" onclick="openLeadModal(${l.id})">
+            <div class="lead-name">${l.name || l.phone}</div>
+            <div class="lead-meta">
+              ${l.listing_type ? l.listing_type + ' · ' : ''}${l.preferred_area || ''}<br>
+              ${l.budget_max ? currency + Number(l.budget_max).toLocaleString() : ''}
+            </div>
+          </div>`).join('') : '<div class="pipe-empty">No leads here yet</div>'}
+      </div>`;
+  }).join('');
+}
+
+function openLeadModal(id) {
+  const l = leads.find(x => x.id === id);
+  activeLeadId = id;
+  const currency = getCurrency();
+  document.getElementById('lead-modal-body').innerHTML = `
+    <div class="form-row"><label>Name</label><div style="font-size:14px;">${l.name || 'Not given yet'}</div></div>
+    <div class="form-row"><label>Phone</label><div style="font-size:14px;">${l.phone}</div></div>
+    <div class="form-row-2">
+      <div><label>Looking to</label><div style="font-size:14px;">${l.listing_type || '—'}</div></div>
+      <div><label>Property type</label><div style="font-size:14px;">${l.property_type || '—'}</div></div>
+    </div>
+    <div class="form-row-2">
+      <div><label>Budget</label><div style="font-size:14px;">${l.budget_min || l.budget_max ? (currency + Number(l.budget_min||0).toLocaleString() + ' – ' + currency + Number(l.budget_max||0).toLocaleString()) : '—'}</div></div>
+      <div><label>Preferred area</label><div style="font-size:14px;">${l.preferred_area || '—'}</div></div>
+    </div>
+    <div class="form-row"><label>Move to stage</label>
+      <select id="lead-stage-select">
+        ${STAGES.map(s => `<option value="${s.key}" ${s.key===l.stage?'selected':''}>${s.label}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-row"><label>Notes</label><textarea id="lead-notes">${l.notes || ''}</textarea></div>
+  `;
+  document.getElementById('lead-modal').classList.add('open');
+  document.getElementById('lead-stage-select').addEventListener('change', async e => {
+    try {
+      await fetch(`${API}/leads/${id}/stage`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ stage: e.target.value }) });
+      showToast('✓ Stage updated'); closeLeadModal(); loadLeads(); loadPipelineSummary();
+    } catch(err) { showToast('⚠️ Could not update stage'); }
+  });
+}
+
+function closeLeadModal() { document.getElementById('lead-modal').classList.remove('open'); activeLeadId = null; }
+
+async function saveLeadNotes() {
+  if (!activeLeadId) return;
+  const notes = document.getElementById('lead-notes').value;
+  try {
+    await fetch(`${API}/leads/${activeLeadId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ notes }) });
+    showToast('✓ Notes saved'); closeLeadModal(); loadLeads();
+  } catch(e) { showToast('⚠️ Could not save notes'); }
+}
+
+// ── VIEWINGS ─────────────────────────────────────────────────────────────────
+
+async function loadViewings() {
+  if (!vendor) return;
+  const list = document.getElementById('viewings-list');
+  try {
+    const res = await fetch(`${API}/viewings?vendor_id=${vendor.id}`);
+    viewings = await res.json();
+    if (!viewings.length) { list.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">No viewing requests yet</div><div>Requests booked via WhatsApp will appear here</div></div>'; return; }
+    list.innerHTML = viewings.map(v => `
+      <div class="data-row" style="grid-template-columns:1.4fr 1.4fr 1fr 1fr 110px;">
+        <div><div class="row-title">${v.leads?.name || 'Unknown'}</div><div class="row-sub">${v.leads?.phone || ''}</div></div>
+        <div><div class="row-title" style="font-size:13px;">${v.properties?.title || 'Not specified'}</div><div class="row-sub">${[v.properties?.area, v.properties?.city].filter(Boolean).join(', ')}</div></div>
+        <div class="row-sub">${v.requested_date || 'No date'} ${v.requested_time || ''}</div>
+        <div class="row-sub">${v.leads?.phone || '—'}</div>
+        <div>
+          <select class="status-select" onchange="updateViewingStatus(${v.id}, this.value)">
+            <option value="requested" ${v.status==='requested'?'selected':''}>Requested</option>
+            <option value="confirmed" ${v.status==='confirmed'?'selected':''}>Confirmed</option>
+            <option value="completed" ${v.status==='completed'?'selected':''}>Completed</option>
+            <option value="cancelled" ${v.status==='cancelled'?'selected':''}>Cancelled</option>
+            <option value="no_show" ${v.status==='no_show'?'selected':''}>No-show</option>
+          </select>
+        </div>
+      </div>`).join('');
+  } catch(e) { list.innerHTML = '<div class="loading">⚠️ Cannot reach server.</div>'; }
+}
+
+async function updateViewingStatus(id, status) {
+  try { await fetch(`${API}/viewings/${id}/status`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ status }) }); showToast('✓ Status updated'); }
+  catch(e) { showToast('⚠️ Could not update status.'); }
+}
+
+// ── ANALYTICS ────────────────────────────────────────────────────────────────
+
+let leadsChart, pipelineChart;
+
+async function loadAnalytics() {
+  if (!vendor) return;
+  const id = vendor.id;
+  try {
+    const [summary, leadsOverTime, pipeline] = await Promise.all([
+      fetch(`${API}/analytics-re/summary?vendor_id=${id}`).then(r => r.json()),
+      fetch(`${API}/analytics-re/leads-over-time?vendor_id=${id}`).then(r => r.json()),
+      fetch(`${API}/leads/pipeline-summary?vendor_id=${id}`).then(r => r.json()),
+    ]);
+
+    document.getElementById('an-leads').textContent = summary.totalLeads || 0;
+    document.getElementById('an-viewings').textContent = summary.viewingsScheduled || 0;
+    document.getElementById('an-closed').textContent = summary.closedWon || 0;
+    document.getElementById('an-rate').textContent = (summary.convRate || '0.0') + '%';
+
+    if (leadsChart) leadsChart.destroy();
+    leadsChart = new Chart(document.getElementById('chart-leads'), {
+      type: 'bar',
+      data: { labels: leadsOverTime.map(d => d.date), datasets: [{ label:'New Leads', data: leadsOverTime.map(d => d.leads), backgroundColor:'rgba(201,166,107,0.35)', borderColor:'#C9A66B', borderWidth:2, borderRadius:6 }] },
+      options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ x:{ ticks:{ color:'#8B8F9C' }, grid:{ color:'rgba(255,255,255,0.05)' } }, y:{ ticks:{ color:'#8B8F9C' }, grid:{ color:'rgba(255,255,255,0.05)' }, beginAtZero:true } } }
+    });
+
+    if (pipelineChart) pipelineChart.destroy();
+    const labels = STAGES.map(s => s.label);
+    const data = STAGES.map(s => pipeline[s.key] || 0);
+    const hasData = data.some(v => v > 0);
+    pipelineChart = new Chart(document.getElementById('chart-pipeline'), {
+      type: 'doughnut',
+      data: { labels, datasets:[{ data: hasData ? data : [1,0,0,0,0,0], backgroundColor:['#6FA8DC','#C9A66B','#5CC98A','#E0A458','#5CC98A','#FF6161'], borderWidth:0, hoverOffset:4 }] },
+      options: { responsive:true, cutout:'62%', plugins:{ legend:{ position:'bottom', labels:{ color:'#F2EFE9', font:{ size:11 }, padding:10 } } } }
+    });
+  } catch(e) { console.error('Analytics load error:', e); }
+}
+
+// ── MISC ─────────────────────────────────────────────────────────────────────
+
+function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3000); }
+
+document.getElementById('property-modal').addEventListener('click', e => { if(e.target===document.getElementById('property-modal')) closePropertyModal(); });
+document.getElementById('lead-modal').addEventListener('click', e => { if(e.target===document.getElementById('lead-modal')) closeLeadModal(); });
+document.getElementById('login-email').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+</script>
+</body>
+</html>

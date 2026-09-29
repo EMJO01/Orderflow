@@ -1,14 +1,38 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 const supabase = require('./db');
-const { connectVendor, getQR } = require('./whatsapp');
+const { connectVendor, getQR, startFollowUpWorker } = require('./whatsapp');
 
 const app = express();
-app.use(cors({ origin: '*' }));
+
+// Render sits behind a proxy. Without this, the login rate limiter sees every request as one IP.
+app.set('trust proxy', 1);
+
+// Only these sites can call the API from a browser. Add any other frontend domain here.
+const allowedOrigins = [
+  'https://eminnbot.netlify.app',
+  'https://eminntech.com',        // only needed if a page on it calls this API
+  'http://localhost:5500'         // local testing, remove when you no longer need it
+];
+
+app.use(cors({
+  origin: (origin, cb) =>
+    (!origin || allowedOrigins.includes(origin)) ? cb(null, true) : cb(new Error('Not allowed by CORS')),
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+}));
 app.use(express.json());
 
-// ─── PRODUCTS ────────────────────────────────────────────────────────────────
+if (!process.env.ADMIN_PASSWORD || !process.env.JWT_SECRET) {
+  console.error('WARNING: ADMIN_PASSWORD or JWT_SECRET is not set. Admin login will fail.');
+}
+
+const TRIAL_DAYS = 3;
+
+// ─── PRODUCTS (ecommerce) ──────────────────────────────────────────────────────
 
 app.get('/products', async (req, res) => {
   const { vendor_id } = req.query;
@@ -50,7 +74,137 @@ app.delete('/products/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── AUTH ─────────────────────────────────────────────────────────────────────
+// ─── PROPERTIES (real estate) ──────────────────────────────────────────────────
+
+app.get('/properties', async (req, res) => {
+  const { vendor_id } = req.query;
+  let query = supabase.from('properties').select('*').order('created_at', { ascending: false });
+  if (vendor_id) query = query.eq('vendor_id', vendor_id);
+  const { data, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.post('/properties', async (req, res) => {
+  const b = req.body;
+  const property = {
+    vendor_id: b.vendor_id || null,
+    title: b.title, listing_type: b.listing_type, property_type: b.property_type,
+    price: b.price, price_period: b.price_period || null,
+    bedrooms: b.bedrooms || null, bathrooms: b.bathrooms || null, toilets: b.toilets || null,
+    land_size: b.land_size || null, land_size_unit: b.land_size_unit || null,
+    area: b.area || '', city: b.city || '', state: b.state || '',
+    address_private: b.address_private || '', tenure: b.tenure || '',
+    description: b.description || '', features: b.features || [],
+    images: b.images || [], status: b.status || 'available', active: b.active !== false
+  };
+  const { data, error } = await supabase.from('properties').insert([property]).select();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data[0]);
+});
+
+app.put('/properties/:id', async (req, res) => {
+  const b = req.body;
+  const property = {
+    title: b.title, listing_type: b.listing_type, property_type: b.property_type,
+    price: b.price, price_period: b.price_period || null,
+    bedrooms: b.bedrooms || null, bathrooms: b.bathrooms || null, toilets: b.toilets || null,
+    land_size: b.land_size || null, land_size_unit: b.land_size_unit || null,
+    area: b.area || '', city: b.city || '', state: b.state || '',
+    address_private: b.address_private || '', tenure: b.tenure || '',
+    description: b.description || '', features: b.features || [],
+    images: b.images || [], status: b.status, active: b.active
+  };
+  const { error } = await supabase.from('properties').update(property).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.delete('/properties/:id', async (req, res) => {
+  const { error } = await supabase.from('properties').delete().eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// ─── LEADS (real estate pipeline) ──────────────────────────────────────────────
+
+app.get('/leads', async (req, res) => {
+  const { vendor_id, stage } = req.query;
+  let query = supabase.from('leads').select('*').order('last_contact_at', { ascending: false });
+  if (vendor_id) query = query.eq('vendor_id', vendor_id);
+  if (stage)     query = query.eq('stage', stage);
+  const { data, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.put('/leads/:id', async (req, res) => {
+  const allowed = ['name','listing_type','property_type','budget_min','budget_max',
+                    'preferred_area','bedrooms_wanted','timeline','notes','assigned_agent_id'];
+  const patch = {};
+  for (const k of allowed) if (req.body[k] !== undefined) patch[k] = req.body[k];
+  const { error } = await supabase.from('leads').update(patch).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.put('/leads/:id/stage', async (req, res) => {
+  const { stage } = req.body;
+  const valid = ['new','contacted','viewing_scheduled','offer_made','closed_won','closed_lost'];
+  if (!valid.includes(stage)) return res.status(400).json({ error: 'Invalid stage' });
+  const patch = { stage };
+  if (['viewing_scheduled','offer_made','closed_won','closed_lost'].includes(stage)) {
+    patch.next_followup_at = null;
+  }
+  const { error } = await supabase.from('leads').update(patch).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.get('/leads/pipeline-summary', async (req, res) => {
+  const { vendor_id } = req.query;
+  try {
+    let q = supabase.from('leads').select('stage');
+    if (vendor_id) q = q.eq('vendor_id', vendor_id);
+    const { data } = await q;
+    const counts = { new:0, contacted:0, viewing_scheduled:0, offer_made:0, closed_won:0, closed_lost:0 };
+    (data || []).forEach(l => { if (counts[l.stage] !== undefined) counts[l.stage]++; });
+    res.json(counts);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── VIEWINGS (real estate) ─────────────────────────────────────────────────────
+
+app.get('/viewings', async (req, res) => {
+  const { vendor_id, status } = req.query;
+  let query = supabase.from('viewings').select('*, leads(name, phone), properties(title, area, city)')
+    .order('created_at', { ascending: false });
+  if (vendor_id) query = query.eq('vendor_id', vendor_id);
+  if (status)    query = query.eq('status', status);
+  const { data, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.put('/viewings/:id/status', async (req, res) => {
+  const { status } = req.body;
+  const valid = ['requested','confirmed','completed','cancelled','no_show'];
+  if (!valid.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+  const { error } = await supabase.from('viewings').update({ status }).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.put('/viewings/:id', async (req, res) => {
+  const allowed = ['requested_date','requested_time','notes'];
+  const patch = {};
+  for (const k of allowed) if (req.body[k] !== undefined) patch[k] = req.body[k];
+  const { error } = await supabase.from('viewings').update(patch).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// ─── AUTH (ecommerce) ───────────────────────────────────────────────────────────
 
 app.post('/signup', async (req, res) => {
   const { name, business_name, email, whatsapp_number, business_type, about, password, country } = req.body;
@@ -58,12 +212,41 @@ app.post('/signup', async (req, res) => {
   if (existing) return res.json({ success: false, error: 'Email already registered' });
   const { data, error } = await supabase
     .from('vendors')
-    .insert([{ name, business_name, email, whatsapp_number, business_type, about, password, active: false, country: country || 'Nigeria' }])
+    .insert([{
+      name, business_name, email, whatsapp_number, business_type, about, password,
+      active: false, country: country || 'Nigeria', product_type: 'ecommerce'
+    }])
     .select();
   if (error) return res.json({ success: false, error: error.message });
-  console.log(`New signup: ${business_name} (${country || 'Nigeria'}) — ${email}`);
+  console.log(`New ecommerce signup: ${business_name} (${country || 'Nigeria'}) — ${email}`);
   res.json({ success: true });
 });
+
+// ─── AUTH (real estate) ─────────────────────────────────────────────────────────
+
+app.post('/signup-re', async (req, res) => {
+  const { name, business_name, email, whatsapp_number, about, password, country } = req.body;
+  const { data: existing } = await supabase.from('vendors').select('id').eq('email', email).single();
+  if (existing) return res.json({ success: false, error: 'Email already registered' });
+
+  const trial_ends_at = new Date(Date.now() + TRIAL_DAYS * 24 * 3600 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from('vendors')
+    .insert([{
+      name, business_name, email, whatsapp_number,
+      business_type: 'real_estate_agent', about, password,
+      active: false, country: country || 'Nigeria',
+      product_type: 'real_estate', plan: 'trial',
+      subscription_status: 'trialing', trial_ends_at
+    }])
+    .select();
+  if (error) return res.json({ success: false, error: error.message });
+  console.log(`New RE signup: ${business_name} (${country || 'Nigeria'}) — ${email}`);
+  res.json({ success: true });
+});
+
+// ─── LOGIN (shared) ─────────────────────────────────────────────────────────────
 
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
@@ -74,11 +257,14 @@ app.post('/login', async (req, res) => {
   res.json({ success: true, vendor: {
     id: vendor.id, name: vendor.name, business_name: vendor.business_name,
     email: vendor.email, whatsapp_connected: vendor.whatsapp_connected,
-    country: vendor.country || 'Nigeria', bot_instructions: vendor.bot_instructions || ''
+    country: vendor.country || 'Nigeria', bot_instructions: vendor.bot_instructions || '',
+    product_type: vendor.product_type || 'ecommerce',
+    plan: vendor.plan || 'trial', subscription_status: vendor.subscription_status || 'trialing',
+    trial_ends_at: vendor.trial_ends_at || null
   }});
 });
 
-// ─── BOT TRAINING ─────────────────────────────────────────────────────────────
+// ─── BOT TRAINING ───────────────────────────────────────────────────────────────
 
 app.put('/vendors/:id/bot-instructions', async (req, res) => {
   const { bot_instructions } = req.body;
@@ -87,21 +273,63 @@ app.put('/vendors/:id/bot-instructions', async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── ADMIN ────────────────────────────────────────────────────────────────────
+// ─── ADMIN ──────────────────────────────────────────────────────────────────────
+
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
+
+// Open route: exchanges the admin password for a token
+app.post('/admin/login', loginLimiter, (req, res) => {
+  if (!process.env.ADMIN_PASSWORD || !process.env.JWT_SECRET)
+    return res.status(500).json({ error: 'Server auth is not configured' });
+  if (req.body.password !== process.env.ADMIN_PASSWORD)
+    return res.status(401).json({ error: 'Incorrect password' });
+  const token = jwt.sign({ role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '8h' });
+  res.json({ token });
+});
+
+function requireAdmin(req, res, next) {
+  try {
+    const t = (req.headers.authorization || '').replace('Bearer ', '');
+    jwt.verify(t, process.env.JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: 'Unauthorized' });
+  }
+}
+
+// Everything below this line under /admin needs a valid token
+app.use('/admin', requireAdmin);
 
 app.get('/admin/vendors', async (req, res) => {
-  const { data, error } = await supabase.from('vendors').select('*').order('created_at', { ascending: false });
+  const { product_type } = req.query;
+  let query = supabase.from('vendors').select('*').order('created_at', { ascending: false });
+  if (product_type) query = query.eq('product_type', product_type);
+  const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  // never send vendor passwords to the browser
+  res.json(data.map(({ password, ...v }) => v));
 });
 
 app.put('/admin/vendors/:id', async (req, res) => {
-  const { error } = await supabase.from('vendors').update({ active: req.body.active }).eq('id', req.params.id);
+  const { active } = req.body;
+  const { error } = await supabase.from('vendors').update({ active }).eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
 
-// ─── WHATSAPP ─────────────────────────────────────────────────────────────────
+// Manual billing activation (bank transfer confirmed by admin)
+app.put('/admin/vendors/:id/activate-plan', async (req, res) => {
+  const { plan } = req.body; // 'pro' | 'enterprise'
+  if (!['pro', 'enterprise'].includes(plan)) return res.status(400).json({ error: 'Invalid plan' });
+  const periodEnd = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
+  const { error } = await supabase.from('vendors').update({
+    plan, subscription_status: 'active', trial_ends_at: periodEnd
+  }).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// ─── WHATSAPP ───────────────────────────────────────────────────────────────────
 
 app.post('/vendors/:id/connect', async (req, res) => {
   const vendorId = req.params.id;
@@ -124,7 +352,9 @@ app.get('/vendors/:id/qr-image', (req, res) => {
 });
 
 app.get('/vendors/:id/status', async (req, res) => {
-  const { data: vendor } = await supabase.from('vendors').select('whatsapp_connected, business_name').eq('id', req.params.id).single();
+  const { data: vendor } = await supabase.from('vendors')
+    .select('whatsapp_connected, business_name, product_type, plan, subscription_status, trial_ends_at')
+    .eq('id', req.params.id).single();
   res.json(vendor || { whatsapp_connected: false });
 });
 
@@ -134,7 +364,7 @@ app.post('/vendors/:id/disconnect', async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── ORDERS ──────────────────────────────────────────────────────────────────
+// ─── ORDERS (ecommerce) ─────────────────────────────────────────────────────────
 
 app.get('/orders', async (req, res) => {
   const { vendor_id } = req.query;
@@ -165,7 +395,7 @@ app.put('/orders/:id/status', async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+// ─── NOTIFICATIONS (shared) ──────────────────────────────────────────────────────
 
 app.get('/notifications', async (req, res) => {
   const { vendor_id } = req.query;
@@ -192,7 +422,7 @@ app.put('/notifications/:id/read', async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── ANALYTICS ────────────────────────────────────────────────────────────────
+// ─── ANALYTICS (ecommerce) ───────────────────────────────────────────────────────
 
 app.get('/analytics/revenue', async (req, res) => {
   const { vendor_id } = req.query;
@@ -205,7 +435,9 @@ app.get('/analytics/revenue', async (req, res) => {
     const results = [];
     for (const day of days) {
       const next = new Date(day); next.setDate(next.getDate() + 1);
-      let q = supabase.from('orders').select('total_price').gte('created_at', day.toISOString()).lt('created_at', next.toISOString()).neq('status','cancelled');
+      let q = supabase.from('orders').select('total_price')
+        .gte('created_at', day.toISOString()).lt('created_at', next.toISOString())
+        .neq('status','cancelled');
       if (vendor_id) q = q.eq('vendor_id', vendor_id);
       const { data } = await q;
       const revenue = (data||[]).reduce((sum,o) => sum+(parseFloat(o.total_price)||0),0);
@@ -226,9 +458,11 @@ app.get('/analytics/conversion', async (req, res) => {
     const results = [];
     for (const day of days) {
       const next = new Date(day); next.setDate(next.getDate() + 1);
-      let cq = supabase.from('conversations').select('id',{count:'exact'}).gte('started_at',day.toISOString()).lt('started_at',next.toISOString());
+      let cq = supabase.from('conversations').select('id',{count:'exact'})
+        .gte('started_at',day.toISOString()).lt('started_at',next.toISOString());
       if (vendor_id) cq = cq.eq('vendor_id', vendor_id);
-      let oq = supabase.from('orders').select('id',{count:'exact'}).gte('created_at',day.toISOString()).lt('created_at',next.toISOString());
+      let oq = supabase.from('orders').select('id',{count:'exact'})
+        .gte('created_at',day.toISOString()).lt('created_at',next.toISOString());
       if (vendor_id) oq = oq.eq('vendor_id', vendor_id);
       const [{ count: convs },{ count: ords }] = await Promise.all([cq, oq]);
       results.push({ date: day.toLocaleDateString('en-GB',{weekday:'short',day:'numeric'}), conversations: convs||0, orders: ords||0 });
@@ -281,9 +515,54 @@ app.get('/analytics/summary', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── ANALYTICS (real estate) ─────────────────────────────────────────────────────
 
-// ─── LEGACY QR ────────────────────────────────────────────────────────────────
+app.get('/analytics-re/summary', async (req, res) => {
+  const { vendor_id } = req.query;
+  try {
+    let lq = supabase.from('leads').select('id, stage');
+    if (vendor_id) lq = lq.eq('vendor_id', vendor_id);
+    let vq = supabase.from('viewings').select('id, status');
+    if (vendor_id) vq = vq.eq('vendor_id', vendor_id);
+    let pq = supabase.from('properties').select('id').eq('status', 'available');
+    if (vendor_id) pq = pq.eq('vendor_id', vendor_id);
+
+    const [{ data: leads }, { data: viewings }, { data: properties }] = await Promise.all([lq, vq, pq]);
+
+    const totalLeads       = (leads || []).length;
+    const closedWon         = (leads || []).filter(l => l.stage === 'closed_won').length;
+    const viewingsScheduled = (viewings || []).filter(v => v.status !== 'cancelled').length;
+    const convRate          = totalLeads > 0 ? ((closedWon / totalLeads) * 100).toFixed(1) : '0.0';
+
+    res.json({
+      totalLeads, closedWon, viewingsScheduled,
+      activeListings: (properties || []).length, convRate
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/analytics-re/leads-over-time', async (req, res) => {
+  const { vendor_id } = req.query;
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0,0,0,0);
+    days.push(d);
+  }
+  try {
+    const results = [];
+    for (const day of days) {
+      const next = new Date(day); next.setDate(next.getDate() + 1);
+      let q = supabase.from('leads').select('id',{count:'exact'})
+        .gte('created_at', day.toISOString()).lt('created_at', next.toISOString());
+      if (vendor_id) q = q.eq('vendor_id', vendor_id);
+      const { count } = await q;
+      results.push({ date: day.toLocaleDateString('en-GB',{weekday:'short',day:'numeric'}), leads: count || 0 });
+    }
+    res.json(results);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 app.get('/qr', (req, res) => {
   const qr = getQR('owner');
@@ -310,152 +589,9 @@ async function reconnectActiveVendors() {
   }
 }
 
-// ─── ANALYTICS ────────────────────────────────────────────────────────────────
-// Add these routes to server.js before app.listen
-
-// Revenue over time — last 7 days
-app.get('/analytics/revenue', async (req, res) => {
-  const { vendor_id } = req.query;
-  const days = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    d.setHours(0, 0, 0, 0);
-    days.push(d);
-  }
-
-  try {
-    const results = [];
-    for (const day of days) {
-      const next = new Date(day);
-      next.setDate(next.getDate() + 1);
-      let q = supabase.from('orders').select('total_price')
-        .gte('created_at', day.toISOString())
-        .lt('created_at', next.toISOString())
-        .neq('status', 'cancelled');
-      if (vendor_id) q = q.eq('vendor_id', vendor_id);
-      const { data } = await q;
-      const revenue = (data || []).reduce((sum, o) => sum + (parseFloat(o.total_price) || 0), 0);
-      results.push({
-        date:  day.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' }),
-        revenue
-      });
-    }
-    res.json(results);
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Conversations vs orders (conversion rate) — last 7 days
-app.get('/analytics/conversion', async (req, res) => {
-  const { vendor_id } = req.query;
-  const days = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    d.setHours(0, 0, 0, 0);
-    days.push(d);
-  }
-
-  try {
-    const results = [];
-    for (const day of days) {
-      const next = new Date(day);
-      next.setDate(next.getDate() + 1);
-
-      let cq = supabase.from('conversations').select('id', { count: 'exact' })
-        .gte('started_at', day.toISOString()).lt('started_at', next.toISOString());
-      if (vendor_id) cq = cq.eq('vendor_id', vendor_id);
-
-      let oq = supabase.from('orders').select('id', { count: 'exact' })
-        .gte('created_at', day.toISOString()).lt('created_at', next.toISOString());
-      if (vendor_id) oq = oq.eq('vendor_id', vendor_id);
-
-      const [{ count: convs }, { count: ords }] = await Promise.all([cq, oq]);
-      results.push({
-        date:          day.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' }),
-        conversations: convs || 0,
-        orders:        ords  || 0
-      });
-    }
-    res.json(results);
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Top selling products
-app.get('/analytics/top-products', async (req, res) => {
-  const { vendor_id } = req.query;
-  try {
-    let q = supabase.from('orders').select('items, total_price').neq('status', 'cancelled');
-    if (vendor_id) q = q.eq('vendor_id', vendor_id);
-    const { data } = await q;
-
-    // Count by item name
-    const counts = {};
-    const revenue = {};
-    (data || []).forEach(o => {
-      const name = (o.items || 'Unknown').trim();
-      counts[name]  = (counts[name]  || 0) + 1;
-      revenue[name] = (revenue[name] || 0) + (parseFloat(o.total_price) || 0);
-    });
-
-    const top = Object.entries(counts)
-      .map(([name, orders]) => ({ name, orders, revenue: revenue[name] || 0 }))
-      .sort((a, b) => b.orders - a.orders)
-      .slice(0, 5);
-
-    res.json(top);
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Orders by status
-app.get('/analytics/order-status', async (req, res) => {
-  const { vendor_id } = req.query;
-  try {
-    let q = supabase.from('orders').select('status');
-    if (vendor_id) q = q.eq('vendor_id', vendor_id);
-    const { data } = await q;
-
-    const counts = { pending: 0, confirmed: 0, delivered: 0, cancelled: 0 };
-    (data || []).forEach(o => {
-      if (counts[o.status] !== undefined) counts[o.status]++;
-    });
-
-    res.json(counts);
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Summary stats
-app.get('/analytics/summary', async (req, res) => {
-  const { vendor_id } = req.query;
-  try {
-    let oq = supabase.from('orders').select('total_price, status').neq('status', 'cancelled');
-    if (vendor_id) oq = oq.eq('vendor_id', vendor_id);
-
-    let cq = supabase.from('conversations').select('id', { count: 'exact' });
-    if (vendor_id) cq = cq.eq('vendor_id', vendor_id);
-
-    const [{ data: orders }, { count: totalConvs }] = await Promise.all([oq, cq]);
-
-    const totalRevenue = (orders || []).reduce((s, o) => s + (parseFloat(o.total_price) || 0), 0);
-    const totalOrders  = (orders || []).length;
-    const convRate     = totalConvs > 0 ? ((totalOrders / totalConvs) * 100).toFixed(1) : '0.0';
-
-    res.json({ totalRevenue, totalOrders, totalConvs: totalConvs || 0, convRate });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Nexua OrderFlow server running on port ${PORT}`);
   reconnectActiveVendors();
+  startFollowUpWorker();
 });

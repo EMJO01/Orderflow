@@ -1,9 +1,10 @@
-const { default: makeWASocket, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const { useSupabaseAuthState } = require('./auth-supabase');
 const supabase = require('./db');
 const ai = require('./ai');
 
+const reconnectTries = {};
 const connections = {};
 const qrCodes = {};
 const conversationHistory = {};
@@ -458,8 +459,17 @@ async function connectVendor(vendorId, vendorName) {
 
   const { state, saveCreds } = await useSupabaseAuthState(vendorId);
 
+  let version;
+  try {
+    ({ version } = await fetchLatestBaileysVersion());
+    console.log(`[WA] Using WhatsApp Web version ${version.join('.')}`);
+  } catch (e) {
+    console.log('[WA] Could not fetch latest WhatsApp version, using library default');
+  }
+
   const sock = makeWASocket({
     auth: state,
+    ...(version ? { version } : {}),
     printQRInTerminal: false,
     syncFullHistory: false,
     connectTimeoutMs: 60000,
@@ -482,6 +492,7 @@ async function connectVendor(vendorId, vendorName) {
     if (connection === 'open') {
       console.log(`✅ ${vendorName} WhatsApp connected!`);
       connections[vendorId].isReady = true;
+      reconnectTries[vendorId] = 0;
       qrCodes[vendorId] = null;
       await saveCreds();
       if (vendorId !== 'owner') {
@@ -510,7 +521,14 @@ async function connectVendor(vendorId, vendorName) {
       }
 
       if (shouldReconnect) {
-        setTimeout(() => connectVendor(vendorId, vendorName), 3000);
+        const tries = (reconnectTries[vendorId] = (reconnectTries[vendorId] || 0) + 1);
+        if (tries > 8) {
+          console.log(`[${vendorName}] Giving up after ${tries - 1} failed reconnects. Click Connect WhatsApp to try again.`);
+          reconnectTries[vendorId] = 0;
+          return;
+        }
+        const delay = Math.min(3000 * 2 ** (tries - 1), 60000);
+        setTimeout(() => connectVendor(vendorId, vendorName), delay);
       }
     }
   });
@@ -564,4 +582,4 @@ async function sendWhatsApp(vendorId, to, message) {
   await conn.sock.sendMessage(jid, { text: message });
 }
 
-module.exports = { connectVendor, getQR, sendWhatsApp, startFollowUpWorker, clearSession };
+module.exports = { connectVendor, getQR, sendWhatsApp, startFollowUpWorker, clearSession, reconnectTries };

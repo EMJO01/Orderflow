@@ -14,7 +14,7 @@
     "@anthropic-ai/sdk": "^0.97.1",
     "@hapi/boom": "^10.0.1",
     "@supabase/supabase-js": "^2.106.0",
-    "@whiskeysockets/baileys": "^7.0.0-rc13",
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
     "axios": "^1.16.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",

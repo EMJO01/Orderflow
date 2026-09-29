@@ -66,7 +66,7 @@ h1,h2,h3,.font-serif{font-family:'Fraunces',serif;}
 .content{padding:28px 32px;}
 
 .trial-banner{background:var(--accent-dim); border:1px solid var(--line, rgba(201,166,107,0.3)); border-radius:var(--radius);
-  padding:12px 20px; margin-bottom:22px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:13px;}
+  padding:12px 20px; margin-bottom:22px; display:block; line-height:1.6; font-size:13px;}
 .trial-banner.expired{background:var(--red-dim); border-color:var(--red); color:var(--red);}
 .trial-banner b{color:var(--accent);}
 .trial-banner.expired b{color:var(--red);}
@@ -513,6 +513,7 @@ window.fetch = async (url, opts = {}) => {
   if (isApi && res.status === 401) logout();
   return res;
 };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let properties = [], leads = [], viewings = [];
 let editingPropertyId = null, activeLeadId = null;
 let currentCat = 'all', searchTerm = '';
@@ -584,7 +585,7 @@ function renderTrialBanner() {
   const now = new Date();
   const daysLeft = Math.ceil((end - now) / (1000*60*60*24));
   if (vendor.subscription_status === 'active' && daysLeft > 0) {
-    wrap.innerHTML = `<div class="content" style="padding-bottom:0;"><div class="trial-banner">Your <b>${vendor.plan}</b> plan is active — renews in ${daysLeft} day${daysLeft!==1?'s':''}.</div></div>`;
+    wrap.innerHTML = `<div class="content" style="padding-bottom:0;"><div class="trial-banner">Your <b>${esc(vendor.plan)}</b> plan is active — renews in ${daysLeft} day${daysLeft!==1?'s':''}.</div></div>`;
   } else if (daysLeft > 0) {
     wrap.innerHTML = `<div class="content" style="padding-bottom:0;"><div class="trial-banner"><b>${daysLeft} day${daysLeft!==1?'s':''}</b> left on your free trial. Pay by bank transfer to activate a plan — contact support to complete activation.</div></div>`;
   } else {
@@ -640,7 +641,7 @@ async function loadNotifications() {
     list.innerHTML = notifs.map(n => `
       <div class="notif-item ${n.read ? '' : 'unread'}" onclick="markRead(${n.id}, this)">
         <div class="notif-icon">${notifIcon(n.type)}</div>
-        <div class="notif-content"><div class="notif-msg">${n.message}</div><div class="notif-time">${timeAgo(n.created_at)}</div></div>
+        <div class="notif-content"><div class="notif-msg">${esc(n.message)}</div><div class="notif-time">${timeAgo(n.created_at)}</div></div>
         ${!n.read ? '<div class="notif-unread-dot"></div>' : ''}
       </div>`).join('');
     loadNotificationCount();
@@ -715,7 +716,19 @@ async function startQR() {
   function showStep() { if (stepIndex < steps.length) { qrContent.innerHTML = `<div class="qr-loading">${steps[stepIndex]}<br><small style="color:var(--muted);margin-top:8px;display:block">This takes about 10 seconds</small></div>`; stepIndex++; } }
   showStep();
   const stepTimer = setInterval(showStep, 3000);
-  try { await fetch(`${API}/vendors/${vendor.id}/connect`, { method: 'POST' }); } catch(e) {}
+  try {
+    const cres = await fetch(`${API}/vendors/${vendor.id}/connect`, { method: 'POST' });
+    if (!cres.ok) {
+      let msg = ''; try { msg = (await cres.json()).error || ''; } catch(e) {}
+      clearInterval(stepTimer);
+      qrContent.innerHTML = `<div class="qr-loading">Could not start the connection (error ${cres.status}${msg ? ': ' + esc(msg) : ''}).<br><button class="btn btn-ghost" onclick="startQR()" style="margin-top:12px">Try again</button></div>`;
+      return;
+    }
+  } catch(e) {
+    clearInterval(stepTimer);
+    qrContent.innerHTML = '<div class="qr-loading">Cannot reach the server.<br><button class="btn btn-ghost" onclick="startQR()" style="margin-top:12px">Try again</button></div>';
+    return;
+  }
   let qrShown = false, qrAttempts = 0;
   qrPolling = setInterval(async () => {
     qrAttempts++;
@@ -737,7 +750,7 @@ async function startQR() {
           </div>`;
       }
     } catch(e) {}
-    if (qrAttempts > 60) { clearInterval(qrPolling); clearInterval(stepTimer); qrPolling = null; if (!qrShown) qrContent.innerHTML = '<div class="qr-loading">⚠️ Timed out.<br><button class="btn btn-ghost" onclick="startQR()" style="margin-top:12px">Try again</button></div>'; }
+    if (qrAttempts > 60) { clearInterval(qrPolling); clearInterval(stepTimer); qrPolling = null; if (!qrShown) { clearInterval(statusPoller); statusPoller = null; } if (!qrShown) qrContent.innerHTML = '<div class="qr-loading">⚠️ Timed out.<br><button class="btn btn-ghost" onclick="startQR()" style="margin-top:12px">Try again</button></div>'; }
   }, 2000);
   statusPoller = setInterval(async () => {
     try {
@@ -766,17 +779,17 @@ function renderProperties() {
   const existingTypes = [...new Set(properties.map(p => p.property_type).filter(Boolean))];
   document.getElementById('filter-pills').innerHTML =
     `<button class="pill ${currentCat==='all'?'active':''}" onclick="filterCat('all',this)">All</button>` +
-    existingTypes.map(t => `<button class="pill ${currentCat===t?'active':''}" onclick="filterCat('${t}',this)">${t}</button>`).join('');
+    existingTypes.map(t => `<button class="pill ${currentCat===t?'active':''}" data-cat="${esc(t)}" onclick="filterCat(this.dataset.cat,this)">${esc(t)}</button>`).join('');
 
   const filtered = properties.filter(p => (currentCat === 'all' || p.property_type === currentCat) && p.title.toLowerCase().includes(searchTerm.toLowerCase()));
 
   list.innerHTML = filtered.length ? filtered.map(p => `
     <div class="data-row" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 80px;">
-      <div><div class="row-title">${p.title}</div><div class="row-sub">${p.listing_type || ''} · ${p.property_type || ''}</div></div>
-      <div class="price">${currency}${Number(p.price).toLocaleString()}${p.price_period ? ' '+p.price_period : ''}</div>
-      <div class="row-sub">${[p.area,p.city].filter(Boolean).join(', ') || '—'}</div>
-      <div class="row-sub">${p.bedrooms||'—'} bed / ${p.bathrooms||'—'} bath</div>
-      <div><span class="badge badge-${p.status}">${(p.status||'available').replace('_',' ')}</span></div>
+      <div><div class="row-title">${esc(p.title)}</div><div class="row-sub">${esc(p.listing_type || '')} · ${esc(p.property_type || '')}</div></div>
+      <div class="price">${currency}${Number(p.price).toLocaleString()}${esc(p.price_period ? ' '+p.price_period : '')}</div>
+      <div class="row-sub">${esc([p.area,p.city].filter(Boolean).join(', ') || '—')}</div>
+      <div class="row-sub">${esc(p.bedrooms||'—')} bed / ${esc(p.bathrooms||'—')} bath</div>
+      <div><span class="badge badge-${esc(p.status)}">${esc((p.status||'available').replace('_',' '))}</span></div>
       <div class="actions"><button class="icon-btn" onclick="editProperty(${p.id})">✏️</button><button class="icon-btn delete" onclick="deleteProperty(${p.id})">🗑</button></div>
     </div>`).join('')
   : '<div class="empty-state"><div class="empty-icon">🏠</div><div class="empty-title">No listings yet</div><div>Click + Add Property to get started</div></div>';
@@ -892,10 +905,10 @@ function renderPipeline() {
         <div class="pipe-col-head"><h4>${stage.label}</h4><span class="pipe-count">${items.length}</span></div>
         ${items.length ? items.map(l => `
           <div class="lead-card" onclick="openLeadModal(${l.id})">
-            <div class="lead-name">${l.name || l.phone}</div>
+            <div class="lead-name">${esc(l.name || l.phone)}</div>
             <div class="lead-meta">
-              ${l.listing_type ? l.listing_type + ' · ' : ''}${l.preferred_area || ''}<br>
-              ${l.budget_max ? currency + Number(l.budget_max).toLocaleString() : ''}
+              ${esc(l.listing_type ? l.listing_type + ' · ' : '')}${esc(l.preferred_area || '')}<br>
+              ${esc(l.budget_max ? currency + Number(l.budget_max).toLocaleString() : '')}
             </div>
           </div>`).join('') : '<div class="pipe-empty">No leads here yet</div>'}
       </div>`;
@@ -907,22 +920,22 @@ function openLeadModal(id) {
   activeLeadId = id;
   const currency = getCurrency();
   document.getElementById('lead-modal-body').innerHTML = `
-    <div class="form-row"><label>Name</label><div style="font-size:14px;">${l.name || 'Not given yet'}</div></div>
-    <div class="form-row"><label>Phone</label><div style="font-size:14px;">${l.phone}</div></div>
+    <div class="form-row"><label>Name</label><div style="font-size:14px;">${esc(l.name || 'Not given yet')}</div></div>
+    <div class="form-row"><label>Phone</label><div style="font-size:14px;">${esc(l.phone)}</div></div>
     <div class="form-row-2">
-      <div><label>Looking to</label><div style="font-size:14px;">${l.listing_type || '—'}</div></div>
-      <div><label>Property type</label><div style="font-size:14px;">${l.property_type || '—'}</div></div>
+      <div><label>Looking to</label><div style="font-size:14px;">${esc(l.listing_type || '—')}</div></div>
+      <div><label>Property type</label><div style="font-size:14px;">${esc(l.property_type || '—')}</div></div>
     </div>
     <div class="form-row-2">
-      <div><label>Budget</label><div style="font-size:14px;">${l.budget_min || l.budget_max ? (currency + Number(l.budget_min||0).toLocaleString() + ' – ' + currency + Number(l.budget_max||0).toLocaleString()) : '—'}</div></div>
-      <div><label>Preferred area</label><div style="font-size:14px;">${l.preferred_area || '—'}</div></div>
+      <div><label>Budget</label><div style="font-size:14px;">${esc(l.budget_min || l.budget_max ? (currency + Number(l.budget_min||0).toLocaleString() + ' – ' + currency + Number(l.budget_max||0).toLocaleString()) : '—')}</div></div>
+      <div><label>Preferred area</label><div style="font-size:14px;">${esc(l.preferred_area || '—')}</div></div>
     </div>
     <div class="form-row"><label>Move to stage</label>
       <select id="lead-stage-select">
         ${STAGES.map(s => `<option value="${s.key}" ${s.key===l.stage?'selected':''}>${s.label}</option>`).join('')}
       </select>
     </div>
-    <div class="form-row"><label>Notes</label><textarea id="lead-notes">${l.notes || ''}</textarea></div>
+    <div class="form-row"><label>Notes</label><textarea id="lead-notes">${esc(l.notes || '')}</textarea></div>
   `;
   document.getElementById('lead-modal').classList.add('open');
   document.getElementById('lead-stage-select').addEventListener('change', async e => {
@@ -955,10 +968,10 @@ async function loadViewings() {
     if (!viewings.length) { list.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">No viewing requests yet</div><div>Requests booked via WhatsApp will appear here</div></div>'; return; }
     list.innerHTML = viewings.map(v => `
       <div class="data-row" style="grid-template-columns:1.4fr 1.4fr 1fr 1fr 110px;">
-        <div><div class="row-title">${v.leads?.name || 'Unknown'}</div><div class="row-sub">${v.leads?.phone || ''}</div></div>
-        <div><div class="row-title" style="font-size:13px;">${v.properties?.title || 'Not specified'}</div><div class="row-sub">${[v.properties?.area, v.properties?.city].filter(Boolean).join(', ')}</div></div>
-        <div class="row-sub">${v.requested_date || 'No date'} ${v.requested_time || ''}</div>
-        <div class="row-sub">${v.leads?.phone || '—'}</div>
+        <div><div class="row-title">${esc(v.leads?.name || 'Unknown')}</div><div class="row-sub">${esc(v.leads?.phone || '')}</div></div>
+        <div><div class="row-title" style="font-size:13px;">${esc(v.properties?.title || 'Not specified')}</div><div class="row-sub">${esc([v.properties?.area, v.properties?.city].filter(Boolean).join(', '))}</div></div>
+        <div class="row-sub">${esc(v.requested_date || 'No date')} ${esc(v.requested_time || '')}</div>
+        <div class="row-sub">${esc(v.leads?.phone || '—')}</div>
         <div>
           <select class="status-select" onchange="updateViewingStatus(${v.id}, this.value)">
             <option value="requested" ${v.status==='requested'?'selected':''}>Requested</option>

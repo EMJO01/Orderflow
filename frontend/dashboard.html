@@ -445,6 +445,7 @@ window.fetch = async (url, opts = {}) => {
   if (isApi && res.status === 401) logout();
   return res;
 };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let products = [], selectedEmoji = '👕', editingId = null;
 let currentCat = 'all', searchTerm = '';
 let vendor = null;
@@ -558,7 +559,7 @@ async function loadNotifications() {
       <div class="notif-item ${n.read ? '' : 'unread'}" onclick="markRead(${n.id}, this)">
         <div class="notif-icon">${n.type === 'order' ? '🛍️' : '🙋'}</div>
         <div class="notif-content">
-          <div class="notif-msg">${n.message}</div>
+          <div class="notif-msg">${esc(n.message)}</div>
           <div class="notif-time">${timeAgo(n.created_at)}</div>
         </div>
         ${!n.read ? '<div class="notif-unread-dot"></div>' : ''}
@@ -667,7 +668,19 @@ async function startQR() {
   showStep();
   const stepTimer = setInterval(showStep, 3000);
 
-  try { await fetch(`${API}/vendors/${vendor.id}/connect`, { method: 'POST' }); } catch(e) {}
+  try {
+    const cres = await fetch(`${API}/vendors/${vendor.id}/connect`, { method: 'POST' });
+    if (!cres.ok) {
+      let msg = ''; try { msg = (await cres.json()).error || ''; } catch(e) {}
+      clearInterval(stepTimer);
+      qrContent.innerHTML = `<div class="qr-loading">Could not start the connection (error ${cres.status}${msg ? ': ' + esc(msg) : ''}).<br><button class="btn btn-ghost" onclick="startQR()" style="margin-top:12px">Try again</button></div>`;
+      return;
+    }
+  } catch(e) {
+    clearInterval(stepTimer);
+    qrContent.innerHTML = '<div class="qr-loading">Cannot reach the server.<br><button class="btn btn-ghost" onclick="startQR()" style="margin-top:12px">Try again</button></div>';
+    return;
+  }
 
   let qrShown = false, qrAttempts = 0;
 
@@ -692,7 +705,7 @@ async function startQR() {
           </div>`;
       }
     } catch(e) {}
-    if (qrAttempts > 60) { clearInterval(qrPolling); clearInterval(stepTimer); qrPolling = null; if (!qrShown) qrContent.innerHTML = '<div class="qr-loading">⚠️ Timed out.<br><button class="btn btn-ghost" onclick="startQR()" style="margin-top:12px">Try again</button></div>'; }
+    if (qrAttempts > 60) { clearInterval(qrPolling); clearInterval(stepTimer); qrPolling = null; if (!qrShown) { clearInterval(statusPoller); statusPoller = null; } if (!qrShown) qrContent.innerHTML = '<div class="qr-loading">⚠️ Timed out.<br><button class="btn btn-ghost" onclick="startQR()" style="margin-top:12px">Try again</button></div>'; }
   }, 2000);
 
   statusPoller = setInterval(async () => {
@@ -736,9 +749,9 @@ async function loadOrders() {
     const currency = getCurrency();
     list.innerHTML = orders.map(o => `
       <div class="product-row" style="grid-template-columns:1.5fr 1fr 1.5fr 1fr 1fr 100px;">
-        <div><div class="product-name">${o.customer_name || 'Unknown'}</div><div class="product-category">${o.customer_phone || ''}</div></div>
-        <div class="cell-small">${o.items || '—'}</div>
-        <div class="cell-small">${o.delivery_address || '—'}</div>
+        <div><div class="product-name">${esc(o.customer_name || 'Unknown')}</div><div class="product-category">${esc(o.customer_phone || '')}</div></div>
+        <div class="cell-small">${esc(o.items || '—')}</div>
+        <div class="cell-small">${esc(o.delivery_address || '—')}</div>
         <div class="price">${currency}${Number(o.total_price || 0).toLocaleString()}</div>
         <div class="cell-small">${new Date(o.created_at).toLocaleDateString()}</div>
         <div>
@@ -778,16 +791,16 @@ function renderProducts() {
   const existingCats = [...new Set(products.map(p => p.category).filter(Boolean))];
   document.getElementById('filter-pills').innerHTML =
     `<button class="pill ${currentCat==='all'?'active':''}" onclick="filterCat('all',this)">All</button>` +
-    existingCats.map(cat => `<button class="pill ${currentCat===cat?'active':''}" onclick="filterCat('${cat}',this)">${catEmoji[cat]||'📦'} ${cat}</button>`).join('');
+    existingCats.map(cat => `<button class="pill ${currentCat===cat?'active':''}" data-cat="${esc(cat)}" onclick="filterCat(this.dataset.cat,this)">${catEmoji[cat]||'📦'} ${esc(cat)}</button>`).join('');
 
   const filtered = products.filter(p => (currentCat === 'all' || p.category === currentCat) && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   list.innerHTML = filtered.length ? filtered.map(p => `
     <div class="product-row">
-      <div class="product-info"><div class="product-emoji">${p.emoji || '📦'}</div><div><div class="product-name">${p.name}</div><div class="product-category">${p.description || ''}</div></div></div>
+      <div class="product-info"><div class="product-emoji">${esc(p.emoji || '📦')}</div><div><div class="product-name">${esc(p.name)}</div><div class="product-category">${esc(p.description || '')}</div></div></div>
       <div class="price">${currency}${Number(p.price).toLocaleString()}</div>
-      <div class="cell-small">${p.category}</div>
-      <div class="cell-small">${p.sizes || '—'}</div>
+      <div class="cell-small">${esc(p.category)}</div>
+      <div class="cell-small">${esc(p.sizes || '—')}</div>
       <div><span class="badge ${p.active?'badge-active':'badge-inactive'}">${p.active?'Active':'Hidden'}</span></div>
       <div class="actions"><button class="icon-btn" onclick="editProduct(${p.id})">✏️</button><button class="icon-btn delete" onclick="deleteProduct(${p.id})">🗑</button></div>
     </div>`).join('')
@@ -907,7 +920,7 @@ async function loadAnalytics() {
       topEl.innerHTML = topProducts.map((p, i) => `
         <div style="margin-bottom:14px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;gap:8px;">
-            <div style="font-size:13px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;">${i+1}. ${p.name}</div>
+            <div style="font-size:13px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;">${i+1}. ${esc(p.name)}</div>
             <div style="font-size:12px;color:var(--muted);white-space:nowrap;">${p.orders} order${p.orders!==1?'s':''} · ${currency}${Number(p.revenue).toLocaleString()}</div>
           </div>
           <div style="height:6px;background:var(--surface2);border-radius:4px;overflow:hidden;">

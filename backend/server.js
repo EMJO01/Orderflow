@@ -606,17 +606,6 @@ app.get('/analytics-re/leads-over-time', auth, ownQuery, async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-app.get('/qr', (req, res) => {
-  const qr = getQR('owner');
-  if (qr) {
-    res.send(`<html><body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#000">
-      <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}" />
-      </body></html>`);
-  } else {
-    res.send('QR not ready yet — wait 10 seconds and refresh');
-  }
-});
-
 app.use('/webhook', require('./webhook'));
 app.get('/', (req, res) => res.json({ message: 'Nexua OrderFlow server running!' }));
 

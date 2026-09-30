@@ -182,6 +182,13 @@ textarea{resize:vertical; min-height:70px;}
 .login-foot a{color:var(--accent); text-decoration:none;}
 
 .training-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px; margin-bottom:20px;}
+.code-row{display:flex; align-items:center; gap:10px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px;}
+.code-row code{flex:1; min-width:0; overflow-x:auto; white-space:nowrap; font-family:monospace; font-size:12.5px; color:var(--accent);}
+.hint-row{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; flex-wrap:wrap;}
+.hint-row span{font-size:11.5px; color:var(--muted);}
+.code-block{background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:16px;
+  font-family:monospace; font-size:12px; line-height:1.6; color:var(--text); overflow-x:auto; white-space:pre;}
+.code-block .k{color:var(--blue);} .code-block .s{color:var(--green);}
 .training-title{font-family:'Fraunces',serif; font-size:15px; font-weight:600; margin-bottom:6px;}
 .training-sub{font-size:13px; color:var(--muted); margin-bottom:16px; line-height:1.5;}
 .training-textarea{width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm);
@@ -285,6 +292,7 @@ textarea{resize:vertical; min-height:70px;}
         <span class="nav-badge" id="notif-badge" style="display:none">0</span>
       </div>
       <div class="nav-item" onclick="showPage('analytics',this)">📊 Analytics</div>
+      <div class="nav-item" onclick="showPage('integrations',this)">🔌 Integrations</div>
     </nav>
     <div class="sidebar-footer">
       <div class="vendor-card">
@@ -423,6 +431,34 @@ textarea{resize:vertical; min-height:70px;}
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;">
         <div class="section-title" style="margin-bottom:16px;">🗂️ Pipeline Breakdown</div>
         <canvas id="chart-pipeline" height="140"></canvas>
+      </div>
+    </div>
+
+    <!-- INTEGRATIONS -->
+    <div class="content" id="page-integrations" style="display:none;">
+      <div class="training-card">
+        <div class="training-title">🔌 Send Leads Into OrderFlow</div>
+        <div class="training-sub">Connect a website form, Zapier, Make, or any automation tool. When it sends a lead here, OrderFlow saves it to your pipeline and can message them on WhatsApp right away — no manual entry.</div>
+
+        <label style="margin-bottom:8px;">Webhook URL</label>
+        <div class="code-row">
+          <code id="io-url">https://rady-bot.onrender.com/leads/import</code>
+          <button class="btn btn-ghost" onclick="copyText('io-url')">Copy</button>
+        </div>
+
+        <label style="margin:18px 0 8px;">Your API Key</label>
+        <div class="code-row">
+          <code id="io-key">Loading...</code>
+          <button class="btn btn-ghost" onclick="copyText('io-key')">Copy</button>
+        </div>
+        <div class="hint-row">
+          <span>Keep this private — anyone with it can create leads and send WhatsApp messages as your bot.</span>
+          <button class="btn btn-ghost" onclick="regenerateApiKey()">Regenerate key</button>
+        </div>
+
+        <label style="margin:18px 0 8px;">Example request</label>
+        <pre class="code-block" id="io-example"></pre>
+        <div class="hint" style="margin-top:6px;">Send this as a <code>POST</code> request with header <code>x-api-key: your key</code> and <code>Content-Type: application/json</code>. Only <code>phone</code> is required — everything else helps the bot open the conversation better. Set <code>"auto_message": false</code> if you'd rather just log the lead and message them yourself from the Leads page.</div>
       </div>
     </div>
   </div>
@@ -599,13 +635,13 @@ if (saved) { vendor = JSON.parse(saved); initDashboard(); }
 // ── NAVIGATION ───────────────────────────────────────────────────────────────
 
 function showPage(page, el) {
-  ['properties','leads','viewings','whatsapp','training','notifications','analytics'].forEach(p => {
+  ['properties','leads','viewings','whatsapp','training','notifications','analytics','integrations'].forEach(p => {
     document.getElementById(`page-${p}`).style.display = 'none';
   });
   document.getElementById(`page-${page}`).style.display = 'block';
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   el.classList.add('active');
-  const titles = {properties:'Properties',leads:'Lead Pipeline',viewings:'Viewings',whatsapp:'WhatsApp Bot',training:'Bot Training',notifications:'Notifications',analytics:'Analytics'};
+  const titles = {properties:'Properties',leads:'Lead Pipeline',viewings:'Viewings',whatsapp:'WhatsApp Bot',training:'Bot Training',notifications:'Notifications',analytics:'Analytics',integrations:'Integrations'};
   document.getElementById('page-title').textContent = titles[page];
   document.getElementById('add-btn').style.display = page === 'properties' ? 'flex' : 'none';
   if (page === 'whatsapp') checkWAStatus();
@@ -613,6 +649,7 @@ function showPage(page, el) {
   if (page === 'viewings') loadViewings();
   if (page === 'notifications') loadNotifications();
   if (page === 'analytics') loadAnalytics();
+  if (page === 'integrations') loadApiKey();
 }
 
 // ── NOTIFICATIONS ────────────────────────────────────────────────────────────
@@ -1029,6 +1066,57 @@ async function loadAnalytics() {
 }
 
 // ── MISC ─────────────────────────────────────────────────────────────────────
+
+// ── INTEGRATIONS ─────────────────────────────────────────────────────────────
+
+function renderImportExample() {
+  const example = {
+    phone: '2348012345678',
+    name: 'Chidinma O.',
+    listing_type: 'rent',
+    preferred_area: 'Lekki Phase 1',
+    budget_min: 4000000,
+    budget_max: 6000000,
+    bedrooms_wanted: 3,
+    source: 'website',
+    auto_message: true
+  };
+  document.getElementById('io-example').textContent =
+    `curl -X POST ${API}/leads/import \\\n` +
+    `  -H "Content-Type: application/json" \\\n` +
+    `  -H "x-api-key: YOUR_API_KEY" \\\n` +
+    `  -d '${JSON.stringify(example, null, 2)}'`;
+}
+
+async function loadApiKey() {
+  if (!vendor) return;
+  renderImportExample();
+  try {
+    const res = await fetch(`${API}/vendors/${vendor.id}/api-key`);
+    const data = await res.json();
+    document.getElementById('io-key').textContent = data.api_key || 'Not available';
+  } catch (e) {
+    document.getElementById('io-key').textContent = 'Could not load key';
+  }
+}
+
+async function regenerateApiKey() {
+  if (!confirm('Regenerate your API key? Anything already using the old key will stop working until you update it there too.')) return;
+  try {
+    const res = await fetch(`${API}/vendors/${vendor.id}/api-key/regenerate`, { method: 'POST' });
+    const data = await res.json();
+    if (data.api_key) { document.getElementById('io-key').textContent = data.api_key; showToast('✓ New API key generated'); }
+    else showToast('⚠️ Could not regenerate key');
+  } catch (e) { showToast('⚠️ Could not regenerate key'); }
+}
+
+function copyText(id) {
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(
+    () => showToast('✓ Copied to clipboard'),
+    () => showToast('⚠️ Could not copy — select and copy manually')
+  );
+}
 
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3000); }
 

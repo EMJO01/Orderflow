@@ -279,6 +279,30 @@ Output only the message text.`
   return response.content[0].text.trim();
 }
 
+async function generateREOutreach(vendorName, lead, properties, country = 'Nigeria', source = '') {
+  const { currency, tone } = getConfig(country);
+  const matches = (properties || []).slice(0, 2).map(p => formatProperty(p, currency)).join('\n');
+
+  const response = await client.messages.create({
+    model:      MODEL,
+    max_tokens: 220,
+    messages: [{
+      role: 'user',
+      content: `You are the WhatsApp assistant for ${vendorName}, a real estate business.
+Tone: ${tone}.
+Write the FIRST message to a new prospect who just enquired${source ? ' via ' + source : ' through another channel'} — this is a cold open, they have not messaged you on WhatsApp before.
+What we know about them:
+${describeLead(lead, currency)}
+
+Keep it under 45 words. Introduce yourself as ${vendorName}'s assistant, warmly reference what they were interested in if known, and end with one question that keeps the conversation going.
+${matches ? 'You may mention ONE listing below only if it clearly fits what they asked about:\n' + matches : 'Do not mention specific listings yet — you don\'t know enough about what they want.'}
+Output only the message text, nothing else.`
+    }]
+  });
+
+  return response.content[0].text.trim();
+}
+
 // ─── TAG EXTRACTION ──────────────────────────────────────────────────────────
 
 function extractJsonTag(reply, tag) {
@@ -306,12 +330,10 @@ function cleanReply(reply) {
 
 module.exports = {
   getCurrency,
-  generateREReply,
-  generateREFollowUp,
   // e-commerce
   generateReply, generateReEngageReply, extractOrder,
   // real estate
-  generateREReply, generateREFollowUp, extractLeadUpdate, extractViewing,
+  generateREReply, generateREFollowUp, generateREOutreach, extractLeadUpdate, extractViewing,
   // shared
   extractHandoff, cleanReply
 };

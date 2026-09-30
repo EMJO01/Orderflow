@@ -1,44 +1,38 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// LEGACY — from an early prototype that used Meta's official WhatsApp Cloud API
+// (hub.verify_token style). The project now uses Baileys for every vendor, which
+// has no concept of this webhook. This file is not wired to anything and does
+// nothing except answer verification pings so it doesn't 404/500 if Meta (or
+// anything else) still has this URL configured somewhere.
+//
+// Safe to delete entirely, along with `app.use('/webhook', require('./webhook'));`
+// in server.js, once you've confirmed nothing external still points at it.
+// The route was previously calling generateReply() and sendWhatsApp() with an
+// outdated, single-vendor function signature — it would have crashed with a
+// 500 on every real message. It's now inert instead.
+// ─────────────────────────────────────────────────────────────────────────────
+
 const express = require('express');
 const router = express.Router();
-const supabase = require('./db');
-const { generateReply } = require('./ai');
-const { sendWhatsApp } = require('./whatsapp');
+
+const VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || 'rady123';
 
 router.get('/', (req, res) => {
-  const VERIFY_TOKEN = 'rady123';
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    console.log('Webhook verified!');
-    res.status(200).send(challenge);
-  } else {
-    res.sendStatus(403);
+    console.log('[webhook] Verification ping received (legacy route, not in active use)');
+    return res.status(200).send(challenge);
   }
+  res.sendStatus(403);
 });
 
-router.post('/', async (req, res) => {
-  try {
-    const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-    if (!message || message.type !== 'text') return res.sendStatus(200);
-
-    const from = message.from;
-    const text = message.text.body;
-    console.log(`Message from ${from}: ${text}`);
-
-    const { data: products } = await supabase
-      .from('products')
-      .select('*')
-      .eq('active', true);
-
-    const reply = await generateReply(text, products || []);
-    await sendWhatsApp(from, reply);
-    console.log(`Replied: ${reply}`);
-    res.sendStatus(200);
-  } catch (error) {
-    console.error('Webhook error:', error.message);
-    res.sendStatus(200);
-  }
+router.post('/', (req, res) => {
+  // Intentionally a no-op — see note above. Logged so it's visible in Render
+  // logs if something is still POSTing here.
+  console.log('[webhook] POST received on legacy webhook — ignored, not wired to any vendor.');
+  res.sendStatus(200);
 });
 
 module.exports = router;

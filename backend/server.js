@@ -5,7 +5,8 @@ const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
 const supabase = require('./db');
-const { connectVendor, getQR, startFollowUpWorker } = require('./whatsapp');
+const crypto = require('crypto');
+const { connectVendor, getQR, startFollowUpWorker, sendInitialOutreach } = require('./whatsapp');
 
 // A WhatsApp connection error should never take the whole server down for every vendor.
 // The error is logged so it shows up in Render Logs.
@@ -69,6 +70,20 @@ const ownsRow = table => async (req, res, next) => {
   if (!data || String(data.vendor_id) !== req.vendorId) return forbid(res);
   next();
 };
+
+// External systems (a website form, Zapier, Make, etc.) authenticate with a
+// long-lived per-vendor API key instead of the short-lived login JWT.
+const importLimiter = rateLimit({ windowMs: 60 * 1000, max: 30 }); // 30 leads/min per IP
+
+async function apiKeyAuth(req, res, next) {
+  const key = req.headers['x-api-key'] || req.query.api_key;
+  if (!key) return res.status(401).json({ error: 'Missing API key. Pass it as the x-api-key header.' });
+  const { data: vendor } = await supabase.from('vendors').select('*').eq('api_key', key).single();
+  if (!vendor) return res.status(401).json({ error: 'Invalid API key' });
+  if (!vendor.active) return res.status(403).json({ error: 'Vendor not approved' });
+  req.leadVendor = vendor;
+  next();
+}
 
 
 // ─── PRODUCTS (ecommerce) ──────────────────────────────────────────────────────
@@ -212,6 +227,64 @@ app.get('/leads/pipeline-summary', auth, ownQuery, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Lead capture from outside WhatsApp: a website form, Zapier, Make, or any
+// automation tool. Authenticated by the vendor's API key, not a login token.
+app.post('/leads/import', importLimiter, apiKeyAuth, async (req, res) => {
+  const vendor = req.leadVendor;
+  if (vendor.product_type !== 'real_estate') {
+    return res.status(400).json({ error: 'Lead import is only available for OrderFlow RE accounts' });
+  }
+
+  const b = req.body;
+  const phoneDigits = String(b.phone || '').replace(/\D/g, '');
+  if (!phoneDigits) return res.status(400).json({ error: 'A valid phone number is required' });
+
+  const patch = {
+    name: b.name || null, listing_type: b.listing_type || null, property_type: b.property_type || null,
+    budget_min: b.budget_min || null, budget_max: b.budget_max || null,
+    preferred_area: b.preferred_area || null, bedrooms_wanted: b.bedrooms_wanted || null,
+    timeline: b.timeline || null, notes: b.notes || null
+  };
+  const source = (b.source || 'import').toString().slice(0, 60);
+
+  const { data: existing } = await supabase.from('leads').select('*')
+    .eq('vendor_id', vendor.id).eq('phone', phoneDigits).maybeSingle();
+
+  let lead;
+  if (existing) {
+    const cleanPatch = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== null));
+    const { data, error } = await supabase.from('leads').update(cleanPatch).eq('id', existing.id).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+    lead = data;
+  } else {
+    const { data, error } = await supabase.from('leads').insert([{
+      ...patch, vendor_id: vendor.id, phone: phoneDigits, source,
+      stage: 'new', last_contact_at: new Date().toISOString()
+    }]).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+    lead = data;
+  }
+
+  await supabase.from('notifications').insert([{
+    vendor_id: vendor.id, type: 'lead',
+    message: `New lead from ${source}: ${lead.name || lead.phone}`,
+    phone: phoneDigits, read: false
+  }]);
+
+  // Sends an opening WhatsApp message unless the caller explicitly opts out.
+  let outreach = { attempted: false };
+  if (b.auto_message !== false) {
+    try {
+      const result = await sendInitialOutreach(String(vendor.id), lead, { customMessage: b.message, source });
+      outreach = { attempted: true, ...result };
+    } catch (e) {
+      outreach = { attempted: true, success: false, error: e.message };
+    }
+  }
+
+  res.json({ success: true, lead_id: lead.id, outreach });
+});
+
 // ─── VIEWINGS (real estate) ─────────────────────────────────────────────────────
 
 app.get('/viewings', auth, ownQuery, async (req, res) => {
@@ -322,6 +395,21 @@ app.put('/vendors/:id/bot-instructions', auth, ownParam, async (req, res) => {
   const { error } = await supabase.from('vendors').update({ bot_instructions }).eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
+});
+
+// ─── LEAD IMPORT API KEY ────────────────────────────────────────────────────────
+
+app.get('/vendors/:id/api-key', auth, ownParam, async (req, res) => {
+  const { data, error } = await supabase.from('vendors').select('api_key').eq('id', req.params.id).single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ api_key: data?.api_key || null });
+});
+
+app.post('/vendors/:id/api-key/regenerate', auth, ownParam, async (req, res) => {
+  const newKey = crypto.randomBytes(24).toString('hex');
+  const { error } = await supabase.from('vendors').update({ api_key: newKey }).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ api_key: newKey });
 });
 
 // ─── ADMIN ──────────────────────────────────────────────────────────────────────

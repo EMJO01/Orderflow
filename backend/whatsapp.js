@@ -238,6 +238,48 @@ async function fetchAvailableProperties(vendorIdInt) {
   return data || [];
 }
 
+// Sends the first WhatsApp message to a lead that came in from outside WhatsApp
+// (a website form, Zapier, etc. via POST /leads/import). Seeds conversation
+// history so a reply from the lead flows straight into handleRealEstate as normal.
+async function sendInitialOutreach(vendorId, lead, { customMessage, source } = {}) {
+  const conn = connections[vendorId];
+  if (!conn?.isReady) return { success: false, error: 'WhatsApp not connected for this vendor' };
+
+  const { data: vendor } = await supabase.from('vendors').select(VENDOR_FIELDS).eq('id', vendorId).single();
+  if (!vendor) return { success: false, error: 'Vendor not found' };
+  if (isSubscriptionExpired(vendor)) return { success: false, error: 'Subscription expired' };
+
+  const jid = lead.jid || `${lead.phone}@s.whatsapp.net`;
+  const properties = await fetchAvailableProperties(parseInt(vendorId));
+
+  let message;
+  try {
+    message = (customMessage && customMessage.trim())
+      ? customMessage.trim()
+      : await ai.generateREOutreach(vendor.business_name, lead, properties, vendor.country || 'Nigeria', source);
+  } catch (err) {
+    return { success: false, error: `Could not generate message: ${err.message}` };
+  }
+
+  try {
+    await conn.sock.sendMessage(jid, { text: message });
+  } catch (err) {
+    return { success: false, error: `Could not send message: ${err.message}` };
+  }
+
+  addToHistory(vendorId, jid, 'assistant', message);
+
+  await supabase.from('leads').update({
+    jid,
+    last_contact_at:  new Date().toISOString(),
+    followup_count:   0,
+    next_followup_at: hoursFromNow(FOLLOWUP_FIRST_HOURS) // nudges automatically if they don't reply
+  }).eq('id', lead.id);
+
+  console.log(`[${vendor.business_name}] Outreach sent to imported lead ${lead.phone}`);
+  return { success: true, message };
+}
+
 async function handleRealEstate({ sock, vendorId, vendorName, from, text, vendor }) {
   const vid             = parseInt(vendorId);
   const phone           = phoneFromJid(from);
@@ -582,4 +624,4 @@ async function sendWhatsApp(vendorId, to, message) {
   await conn.sock.sendMessage(jid, { text: message });
 }
 
-module.exports = { connectVendor, getQR, sendWhatsApp, startFollowUpWorker, clearSession, reconnectTries };
+module.exports = { connectVendor, getQR, sendWhatsApp, startFollowUpWorker, clearSession, reconnectTries, sendInitialOutreach };

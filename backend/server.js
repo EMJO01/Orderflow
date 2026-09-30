@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 require('dotenv').config();
 const supabase = require('./db');
 const crypto = require('crypto');
-const { connectVendor, getQR, startFollowUpWorker, sendInitialOutreach } = require('./whatsapp');
+const { connectVendor, getQR, startFollowUpWorker, sendInitialOutreach, disconnectVendor } = require('./whatsapp');
 
 // A WhatsApp connection error should never take the whole server down for every vendor.
 // The error is logged so it shows up in Render Logs.
@@ -449,6 +449,8 @@ app.put('/admin/vendors/:id', async (req, res) => {
   const { active } = req.body;
   const { error } = await supabase.from('vendors').update({ active }).eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
+  // Deactivating should stop the bot immediately, not just on its next message
+  if (active === false) await disconnectVendor(req.params.id);
   res.json({ success: true });
 });
 
@@ -494,9 +496,12 @@ app.get('/vendors/:id/status', auth, ownParam, async (req, res) => {
 });
 
 app.post('/vendors/:id/disconnect', auth, ownParam, async (req, res) => {
-  const { error } = await supabase.from('vendors').update({ whatsapp_connected: false }).eq('id', req.params.id);
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
+  try {
+    await disconnectVendor(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ─── ORDERS (ecommerce) ─────────────────────────────────────────────────────────

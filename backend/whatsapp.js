@@ -5,6 +5,7 @@ const supabase = require('./db');
 const ai = require('./ai');
 
 const reconnectTries = {};
+const intentionalDisconnect = {}; // set before we call sock.end() ourselves so the close handler doesn't auto-reconnect
 const connections = {};
 const qrCodes = {};
 const conversationHistory = {};
@@ -25,7 +26,7 @@ const FOLLOWUP_MAX          = 2;
 const FOLLOWUP_CHECK_MS     = 5 * 60 * 1000;
 
 const VENDOR_FIELDS =
-  'country, bot_instructions, whatsapp_number, business_name, product_type, plan, subscription_status, trial_ends_at';
+  'active, country, bot_instructions, whatsapp_number, business_name, product_type, plan, subscription_status, trial_ends_at';
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -478,9 +479,31 @@ async function runFollowUps() {
   }
 }
 
+// Proactively drops the live socket for any currently-connected vendor who has
+// since been deactivated or whose trial/plan has expired, rather than waiting
+// for their next incoming message to notice. Frees the connection slot too.
+async function sweepExpiredVendors() {
+  for (const vendorId of Object.keys(connections)) {
+    if (vendorId === 'owner') continue;
+    try {
+      const { data: vendor } = await supabase
+        .from('vendors').select('active, business_name, subscription_status, trial_ends_at')
+        .eq('id', vendorId).single();
+      if (!vendor) continue;
+      if (vendor.active === false || isSubscriptionExpired(vendor)) {
+        console.log(`[${vendor.business_name || vendorId}] Sweep: inactive or expired — disconnecting`);
+        await disconnectVendor(vendorId);
+      }
+    } catch (err) {
+      console.error(`[Sweep] Error checking vendor ${vendorId}:`, err.message);
+    }
+  }
+}
+
 function startFollowUpWorker() {
   console.log('[FollowUp] Worker started (every 5 min)');
   setInterval(runFollowUps, FOLLOWUP_CHECK_MS);
+  setInterval(sweepExpiredVendors, FOLLOWUP_CHECK_MS);
   setTimeout(runFollowUps, 60 * 1000); // first pass 1 min after boot, lets sessions reconnect
 }
 
@@ -545,8 +568,10 @@ async function connectVendor(vendorId, vendorName) {
     if (connection === 'close') {
       connections[vendorId].isReady = false;
       const statusCode      = new Boom(lastDisconnect?.error)?.output?.statusCode;
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-      console.log(`${vendorName} disconnected. Code: ${statusCode}. Reconnecting: ${shouldReconnect}`);
+      const wasIntentional  = !!intentionalDisconnect[vendorId];
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut && !wasIntentional;
+      intentionalDisconnect[vendorId] = false;
+      console.log(`${vendorName} disconnected. Code: ${statusCode}. Intentional: ${wasIntentional}. Reconnecting: ${shouldReconnect}`);
 
       if (vendorId !== 'owner') {
         await supabase.from('vendors').update({ whatsapp_connected: false }).eq('id', vendorId);
@@ -597,6 +622,12 @@ async function connectVendor(vendorId, vendorName) {
       const { data: vendor } = await supabase
         .from('vendors').select(VENDOR_FIELDS).eq('id', vendorId).single();
 
+      // Deactivated by admin → bot goes quiet immediately
+      if (vendor && vendor.active === false) {
+        console.log(`[${vendorName}] Vendor deactivated — bot paused`);
+        return;
+      }
+
       // Trial / subscription over → bot goes quiet (dashboard stays accessible)
       if (isSubscriptionExpired(vendor)) {
         console.log(`[${vendorName}] Subscription expired — bot paused`);
@@ -613,6 +644,25 @@ async function connectVendor(vendorId, vendorName) {
   });
 }
 
+// Actually closes the live WhatsApp socket — used for admin deactivation and the
+// vendor's own "Disconnect" button. Does NOT clear the saved session in Supabase,
+// so reconnecting later (reactivation, or the vendor connecting again) does not
+// require a fresh QR scan. Only a real WhatsApp logout clears the saved session.
+async function disconnectVendor(vendorId) {
+  intentionalDisconnect[vendorId] = true;
+  const conn = connections[vendorId];
+  if (conn?.sock) {
+    try { conn.sock.end(); } catch (e) {}
+  }
+  delete connections[vendorId];
+  qrCodes[vendorId] = null;
+  reconnectTries[vendorId] = 0;
+  if (vendorId !== 'owner') {
+    await supabase.from('vendors').update({ whatsapp_connected: false }).eq('id', vendorId);
+  }
+  console.log(`[Vendor ${vendorId}] Disconnected intentionally`);
+}
+
 function getQR(vendorId) {
   return qrCodes[vendorId] || null;
 }
@@ -624,4 +674,4 @@ async function sendWhatsApp(vendorId, to, message) {
   await conn.sock.sendMessage(jid, { text: message });
 }
 
-module.exports = { connectVendor, getQR, sendWhatsApp, startFollowUpWorker, clearSession, reconnectTries, sendInitialOutreach };
+module.exports = { connectVendor, getQR, sendWhatsApp, startFollowUpWorker, clearSession, reconnectTries, sendInitialOutreach, disconnectVendor };

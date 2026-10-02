@@ -45,6 +45,10 @@ h1,h2,h3,.font-serif{font-family:'Fraunces',serif;}
 .logout-btn{margin-top:10px; width:100%; padding:7px; background:transparent; border:1px solid var(--border);
   border-radius:var(--radius-sm); color:var(--muted); font-size:12px; cursor:pointer; font-family:'DM Sans',sans-serif; transition:all .15s;}
 .logout-btn:hover{border-color:var(--red); color:var(--red);}
+.sidebar-links{display:flex; gap:8px; margin-top:10px;}
+.sidebar-link-btn{flex:1; padding:7px; background:transparent; border:1px solid var(--border); border-radius:var(--radius-sm);
+  color:var(--muted); font-size:11.5px; cursor:pointer; font-family:'DM Sans',sans-serif; transition:all .15s;}
+.sidebar-link-btn:hover{border-color:var(--accent); color:var(--text);}
 .main{flex:1; overflow-y:auto; min-width:0;}
 .topbar{padding:20px 32px; border-bottom:1px solid var(--border); display:flex; align-items:center;
   justify-content:space-between; background:var(--surface); position:sticky; top:0; z-index:50; gap:12px;}
@@ -155,7 +159,7 @@ select.status-select{background:var(--surface2); border:1px solid var(--border);
 .form-row-2{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px;}
 .form-row-3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:16px;}
 label{display:block; font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:7px;}
-input[type=text],input[type=number],textarea,select{width:100%; background:var(--surface2); border:1px solid var(--border);
+input[type=text],input[type=number],input[type=password],textarea,select{width:100%; background:var(--surface2); border:1px solid var(--border);
   border-radius:var(--radius-sm); padding:10px 14px; color:var(--text); font-size:14px; font-family:'DM Sans',sans-serif; outline:none; transition:border-color .15s;}
 input:focus,textarea:focus,select:focus{border-color:var(--accent);}
 select option{background:var(--surface2);}
@@ -182,13 +186,6 @@ textarea{resize:vertical; min-height:70px;}
 .login-foot a{color:var(--accent); text-decoration:none;}
 
 .training-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px; margin-bottom:20px;}
-.code-row{display:flex; align-items:center; gap:10px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px;}
-.code-row code{flex:1; min-width:0; overflow-x:auto; white-space:nowrap; font-family:monospace; font-size:12.5px; color:var(--accent);}
-.hint-row{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; flex-wrap:wrap;}
-.hint-row span{font-size:11.5px; color:var(--muted);}
-.code-block{background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:16px;
-  font-family:monospace; font-size:12px; line-height:1.6; color:var(--text); overflow-x:auto; white-space:pre;}
-.code-block .k{color:var(--blue);} .code-block .s{color:var(--green);}
 .training-title{font-family:'Fraunces',serif; font-size:15px; font-weight:600; margin-bottom:6px;}
 .training-sub{font-size:13px; color:var(--muted); margin-bottom:16px; line-height:1.5;}
 .training-textarea{width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm);
@@ -302,7 +299,10 @@ textarea{resize:vertical; min-height:70px;}
           <div class="vendor-plan" id="sidebar-plan">Trial</div>
         </div>
       </div>
-      <button class="logout-btn" onclick="logout()">Sign out</button>
+      <div class="sidebar-links">
+        <button class="sidebar-link-btn" onclick="openPasswordModal()">Change password</button>
+        <button class="sidebar-link-btn logout-btn" onclick="logout()">Sign out</button>
+      </div>
     </div>
   </aside>
 
@@ -529,6 +529,25 @@ textarea{resize:vertical; min-height:70px;}
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeLeadModal()">Close</button>
       <button class="btn btn-primary" onclick="saveLeadNotes()">Save Notes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password Modal -->
+<div class="modal-overlay" id="password-modal">
+  <div class="modal" style="width:420px;">
+    <div class="modal-header">
+      <div class="modal-title">Change Password</div>
+      <button class="close-btn" onclick="closePasswordModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label>Current Password</label><input type="password" id="pw-current" placeholder="••••••••"></div>
+      <div class="form-row"><label>New Password</label><input type="password" id="pw-new" placeholder="At least 6 characters"></div>
+      <div class="form-row"><label>Confirm New Password</label><input type="password" id="pw-confirm" placeholder="Repeat new password"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closePasswordModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="savePassword()">Save Password</button>
     </div>
   </div>
 </div>
@@ -1065,8 +1084,6 @@ async function loadAnalytics() {
   } catch(e) { console.error('Analytics load error:', e); }
 }
 
-// ── MISC ─────────────────────────────────────────────────────────────────────
-
 // ── INTEGRATIONS ─────────────────────────────────────────────────────────────
 
 function renderImportExample() {
@@ -1118,10 +1135,34 @@ function copyText(id) {
   );
 }
 
+// ── CHANGE PASSWORD ──────────────────────────────────────────────────────────
+
+function openPasswordModal() {
+  ['pw-current','pw-new','pw-confirm'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('password-modal').classList.add('open');
+}
+function closePasswordModal() { document.getElementById('password-modal').classList.remove('open'); }
+
+async function savePassword() {
+  const current = document.getElementById('pw-current').value;
+  const next    = document.getElementById('pw-new').value;
+  const confirmVal = document.getElementById('pw-confirm').value;
+  if (!current || !next) { showToast('⚠️ Fill in both password fields'); return; }
+  if (next.length < 6) { showToast('⚠️ New password must be at least 6 characters'); return; }
+  if (next !== confirmVal) { showToast('⚠️ New passwords do not match'); return; }
+  try {
+    const res  = await fetch(`${API}/vendors/${vendor.id}/password`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ current_password: current, new_password: next }) });
+    const data = await res.json();
+    if (data.success) { showToast('✅ Password updated!'); closePasswordModal(); }
+    else showToast('⚠️ ' + (data.error || 'Could not update password'));
+  } catch(e) { showToast('⚠️ Could not reach server.'); }
+}
+
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3000); }
 
 document.getElementById('property-modal').addEventListener('click', e => { if(e.target===document.getElementById('property-modal')) closePropertyModal(); });
 document.getElementById('lead-modal').addEventListener('click', e => { if(e.target===document.getElementById('lead-modal')) closeLeadModal(); });
+document.getElementById('password-modal').addEventListener('click', e => { if(e.target===document.getElementById('password-modal')) closePasswordModal(); });
 document.getElementById('login-email').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 </script>

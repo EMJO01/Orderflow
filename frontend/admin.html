@@ -112,6 +112,16 @@ input:focus{border-color:var(--green)}
 .toast.show{transform:translateX(0)}
 .toast.err{border-left-color:var(--red)}
 
+/* notifier page */
+.notif-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:560px}
+.notif-status{display:flex;align-items:center;gap:10px;margin-bottom:16px;font-size:14px}
+.notif-dot2{width:9px;height:9px;border-radius:50%;background:var(--red);flex-shrink:0}
+.notif-dot2.on{background:var(--green)}
+.qr-box{background:#fff;border-radius:12px;padding:12px;display:inline-flex;align-items:center;justify-content:center;margin-top:12px}
+.qr-loading{text-align:center;padding:30px;color:var(--muted);font-size:13px}
+.temp-pass{font-family:monospace;font-size:20px;font-weight:700;color:var(--green);background:var(--surface2);
+  border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;letter-spacing:1px;margin:12px 0}
+
 @media (max-width:900px){
   .shell{flex-direction:column}
   .sidebar{width:100%;height:auto;position:static;flex-direction:row;align-items:center;padding:10px 12px;overflow-x:auto}
@@ -146,6 +156,7 @@ input:focus{border-color:var(--green)}
       <button class="nav-item" data-page="vendors" onclick="showPage('vendors',this)">👥 Vendors</button>
       <button class="nav-item" data-page="pending" onclick="showPage('pending',this)">⏳ Pending approval <span class="count" id="pending-count" style="display:none">0</span></button>
       <button class="nav-item" data-page="products" onclick="showPage('products',this)">📦 All products</button>
+      <button class="nav-item" data-page="notifier" onclick="showPage('notifier',this)">🔔 Notifier</button>
     </nav>
     <div class="side-foot"><button class="btn btn-wide" onclick="logout()">Sign out</button></div>
   </aside>
@@ -215,6 +226,24 @@ input:focus{border-color:var(--green)}
           <div id="products-list"><div class="loading">Loading products...</div></div>
         </div></div>
       </div>
+
+      <!-- Notifier -->
+      <div class="page" id="page-notifier">
+        <div class="section-header"><div class="section-title">Nexua Notifications number</div></div>
+        <div class="notif-box">
+          <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:18px;">
+            This WhatsApp number sends vendors their approval message and trial-expiry warnings — since a newly
+            approved vendor hasn't connected their own bot yet, this is the only inbox we can reach them through.
+            Connect a spare WhatsApp number here once; it reconnects automatically on every server restart after that.
+          </p>
+          <div class="notif-status">
+            <div class="notif-dot2" id="notifier-dot"></div>
+            <span id="notifier-status-text">Checking status...</span>
+          </div>
+          <div id="notifier-action"></div>
+          <div id="notifier-qr"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -238,6 +267,7 @@ const LEGACY_LOCAL_PASSWORD = '';
 let vendors = [], products = [];
 let productTab = 'ecommerce', statusFilter = 'all', searchTerm = '';
 let token = sessionStorage.getItem('nexua_token') || '';
+let notifierPolling = null, notifierStatusPoller = null;
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -292,13 +322,15 @@ $('admin-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogi
 if (token || (LEGACY_LOCAL_PASSWORD && sessionStorage.getItem('nexua_admin') === '1')) showApp();
 
 // ── NAV / FILTERS ───────────────────────────────────
-const titles = { overview:'Overview', vendors:'All vendors', pending:'Pending approval', products:'All products' };
+const titles = { overview:'Overview', vendors:'All vendors', pending:'Pending approval', products:'All products', notifier:'Notifier' };
 function showPage(page, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   $('page-' + page).classList.add('active');
   (el || document.querySelector(`[data-page="${page}"]`)).classList.add('active');
   $('page-title').textContent = titles[page];
+  if (page === 'notifier') checkNotifierStatus();
+  else { if (notifierPolling) clearInterval(notifierPolling); if (notifierStatusPoller) clearInterval(notifierStatusPoller); }
 }
 function setProduct(p, el) {
   productTab = p;
@@ -343,6 +375,7 @@ function rowHTML(v) {
     ? `<button class="btn btn-deactivate" onclick="toggleVendor(${+v.id},false,this)">Deactivate</button>`
     : `<button class="btn btn-approve" onclick="toggleVendor(${+v.id},true,this)">Approve</button>`)
     + `<button class="btn" onclick="viewVendor(${+v.id})">View</button>`
+    + `<button class="btn" onclick="resetVendorPassword(${+v.id},this)">Reset password</button>`
     + (isRE ? `<button class="btn btn-plan" onclick="activatePlan(${+v.id},this)">Activate plan</button>` : '');
   return `<div class="row">
     <div><div class="vname">${esc(v.business_name || 'Unnamed')}</div><div class="vsub">${esc(v.email)}</div></div>
@@ -421,12 +454,99 @@ async function activatePlan(id, btn) {
   }
 }
 
+async function resetVendorPassword(id, btn) {
+  const v = vendors.find(x => x.id === id);
+  if (!confirm(`Generate a new temporary password for ${v ? v.business_name : 'this vendor'}? Their current password will stop working immediately.`)) return;
+  if (btn) btn.disabled = true;
+  try {
+    const data = await api(`/admin/vendors/${id}/reset-password`, { method: 'POST' });
+    showTempPasswordModal(data.temp_password, v ? v.business_name : '', v ? v.email : '');
+  } catch (e) {
+    toast('⚠️ ' + e.message, true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function showTempPasswordModal(tempPassword, name, email) {
+  $('modal-title').textContent = 'Temporary password generated';
+  $('modal-body').innerHTML = `
+    <p style="font-size:13px;color:var(--muted);line-height:1.6;">
+      Share this with <strong>${esc(name || 'the vendor')}</strong> (${esc(email || '')}) yourself —
+      it won't be shown again. They should change it from their dashboard once they're in.
+    </p>
+    <div class="temp-pass">${esc(tempPassword)}</div>`;
+  $('modal-foot').innerHTML = `<button class="btn" onclick="copyTempPassword('${esc(tempPassword)}')">Copy</button>
+    <button class="btn btn-approve" onclick="closeModal()">Done</button>`;
+  $('modal').classList.add('open');
+}
+function copyTempPassword(pw) {
+  navigator.clipboard.writeText(pw).then(() => toast('✓ Copied to clipboard'), () => toast('⚠️ Could not copy — select manually', true));
+}
+
+// ── NOTIFIER ─────────────────────────────────────────
+async function checkNotifierStatus() {
+  try {
+    const data = await api('/admin/notifier/status');
+    setNotifierConnected(data.connected);
+  } catch (e) {
+    $('notifier-status-text').textContent = 'Could not check status.';
+  }
+}
+
+function setNotifierConnected(connected) {
+  $('notifier-dot').classList.toggle('on', connected);
+  $('notifier-status-text').textContent = connected ? 'Connected — sending notifications normally.' : 'Not connected — notifications are not being sent.';
+  if (connected) {
+    if (notifierPolling) { clearInterval(notifierPolling); notifierPolling = null; }
+    if (notifierStatusPoller) { clearInterval(notifierStatusPoller); notifierStatusPoller = null; }
+    $('notifier-qr').innerHTML = '';
+    $('notifier-action').innerHTML = '';
+  } else {
+    $('notifier-action').innerHTML = `<button class="btn btn-approve" onclick="connectNotifier()">📱 Connect notifier number</button>`;
+  }
+}
+
+async function connectNotifier() {
+  $('notifier-action').innerHTML = '';
+  $('notifier-qr').innerHTML = '<div class="qr-loading">Starting connection...</div>';
+  try { await api('/admin/notifier/connect', { method: 'POST' }); } catch (e) {}
+
+  let qrShown = false, attempts = 0;
+  if (notifierPolling) clearInterval(notifierPolling);
+  notifierPolling = setInterval(async () => {
+    attempts++;
+    try {
+      const data = await api('/admin/notifier/qr-image');
+      if (data.status === 'ready' && data.url && !qrShown) {
+        qrShown = true;
+        $('notifier-qr').innerHTML = `
+          <div class="qr-box"><img src="${data.url}" width="220" height="220" alt="QR code"/></div>
+          <p style="font-size:12px;color:var(--muted);margin-top:10px;">Scan with the WhatsApp number you want to dedicate to notifications. Expires in 60 seconds.</p>`;
+      }
+    } catch (e) {}
+    if (attempts > 60) {
+      clearInterval(notifierPolling); notifierPolling = null;
+      if (!qrShown) $('notifier-qr').innerHTML = '<div class="qr-loading">⚠️ Timed out. <button class="btn" onclick="connectNotifier()">Try again</button></div>';
+    }
+  }, 2000);
+
+  if (notifierStatusPoller) clearInterval(notifierStatusPoller);
+  notifierStatusPoller = setInterval(async () => {
+    try {
+      const data = await api('/admin/notifier/status');
+      if (data.connected) { setNotifierConnected(true); toast('✓ Notifier connected'); }
+    } catch (e) {}
+  }, 3000);
+}
+
 // ── DETAIL MODAL ────────────────────────────────────
 function viewVendor(id) {
   const v = vendors.find(x => x.id === id);
   if (!v) return;
   const st = vendorStatus(v), count = products.filter(p => p.vendor_id === id).length;
   const row = (l, val) => `<div class="detail"><span>${l}</span><span>${esc(val || '-')}</span></div>`;
+  $('modal-title').textContent = 'Vendor details';
   $('modal-body').innerHTML =
     row('Business name', v.business_name) + row('Owner name', v.name) + row('Email', v.email) +
     row('WhatsApp number', v.whatsapp_number) +

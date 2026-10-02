@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 require('dotenv').config();
 const supabase = require('./db');
 const crypto = require('crypto');
-const { connectVendor, getQR, startFollowUpWorker, sendInitialOutreach, disconnectVendor } = require('./whatsapp');
+const { connectVendor, getQR, startFollowUpWorker, sendInitialOutreach, disconnectVendor, notifyViaOwner, isConnected } = require('./whatsapp');
 
 // A WhatsApp connection error should never take the whole server down for every vendor.
 // The error is logged so it shows up in Render Logs.
@@ -397,6 +397,27 @@ app.put('/vendors/:id/bot-instructions', auth, ownParam, async (req, res) => {
   res.json({ success: true });
 });
 
+// ─── PASSWORD ───────────────────────────────────────────────────────────────────
+
+app.put('/vendors/:id/password', auth, ownParam, async (req, res) => {
+  const { current_password, new_password } = req.body;
+  if (!new_password || String(new_password).length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters' });
+  }
+  const { data: vendor, error: fetchErr } = await supabase.from('vendors').select('password').eq('id', req.params.id).single();
+  if (fetchErr || !vendor) return res.status(404).json({ error: 'Vendor not found' });
+
+  const stored = vendor.password || '';
+  const isHashed = stored.startsWith('$2');
+  const ok = isHashed ? await bcrypt.compare(String(current_password || ''), stored) : stored === current_password;
+  if (!ok) return res.status(401).json({ error: 'Current password is incorrect' });
+
+  const hash = await bcrypt.hash(String(new_password), 10);
+  const { error } = await supabase.from('vendors').update({ password: hash }).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
 // ─── LEAD IMPORT API KEY ────────────────────────────────────────────────────────
 
 app.get('/vendors/:id/api-key', auth, ownParam, async (req, res) => {
@@ -445,13 +466,44 @@ app.get('/admin/vendors', async (req, res) => {
   res.json(data.map(({ password, ...v }) => v));
 });
 
+const DASHBOARD_URLS = {
+  ecommerce:    'https://eminnbot.netlify.app/dashboard',
+  real_estate:  'https://eminnbot.netlify.app/dashboard-re'
+};
+
 app.put('/admin/vendors/:id', async (req, res) => {
   const { active } = req.body;
+  const { data: before } = await supabase.from('vendors').select('active, business_name, whatsapp_number, product_type, approved_notified').eq('id', req.params.id).single();
+
   const { error } = await supabase.from('vendors').update({ active }).eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
+
   // Deactivating should stop the bot immediately, not just on its next message
   if (active === false) await disconnectVendor(req.params.id);
+
+  // First-time approval → let the vendor know via WhatsApp, since they can't
+  // log in to see a dashboard notification yet. Guarded so toggling active
+  // off and back on doesn't re-send it.
+  if (active === true && before && !before.active && !before.approved_notified && before.whatsapp_number) {
+    const dashboardUrl = DASHBOARD_URLS[before.product_type] || DASHBOARD_URLS.ecommerce;
+    const sent = await notifyViaOwner(before.whatsapp_number,
+      `🎉 Hi! Your OrderFlow account for *${before.business_name}* has been approved. Log in here to get started: ${dashboardUrl}`);
+    if (sent.success) await supabase.from('vendors').update({ approved_notified: 'sent' }).eq('id', req.params.id);
+    else console.error(`[Admin] Approval notification failed for vendor ${req.params.id}:`, sent.error);
+  }
+
   res.json({ success: true });
+});
+
+// Admin-initiated reset: generates a temporary password, hashes it, and
+// returns it once for the admin to relay to the vendor. There's no self-serve
+// email-based reset flow yet — this is the stopgap until one exists.
+app.post('/admin/vendors/:id/reset-password', async (req, res) => {
+  const tempPassword = crypto.randomBytes(6).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
+  const hash = await bcrypt.hash(tempPassword, 10);
+  const { error } = await supabase.from('vendors').update({ password: hash }).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true, temp_password: tempPassword });
 });
 
 // Manual billing activation (bank transfer confirmed by admin)
@@ -460,10 +512,32 @@ app.put('/admin/vendors/:id/activate-plan', async (req, res) => {
   if (!['pro', 'enterprise'].includes(plan)) return res.status(400).json({ error: 'Invalid plan' });
   const periodEnd = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
   const { error } = await supabase.from('vendors').update({
-    plan, subscription_status: 'active', trial_ends_at: periodEnd
+    plan, subscription_status: 'active', trial_ends_at: periodEnd, trial_warning_sent_at: null
   }).eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
+});
+
+// ─── NOTIFIER (Nexua's own WhatsApp number for approval/trial messages) ─────────
+
+app.post('/admin/notifier/connect', (req, res) => {
+  connectVendor('owner', 'Nexua Notifications');
+  res.json({ success: true });
+});
+
+app.get('/admin/notifier/qr-image', (req, res) => {
+  const qr = getQR('owner');
+  if (qr) {
+    return res.json({
+      status: 'ready',
+      url: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`
+    });
+  }
+  res.status(202).json({ status: 'not_ready' });
+});
+
+app.get('/admin/notifier/status', (req, res) => {
+  res.json({ connected: isConnected('owner') });
 });
 
 // ─── WHATSAPP ───────────────────────────────────────────────────────────────────
@@ -722,5 +796,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Nexua OrderFlow server running on port ${PORT}`);
   reconnectActiveVendors();
+  connectVendor('owner', 'Nexua Notifications'); // no-op until scanned once from admin
   startFollowUpWorker();
 });

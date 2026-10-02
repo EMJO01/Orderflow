@@ -11,13 +11,12 @@ const qrCodes = {};
 const conversationHistory = {};
 const MAX_HISTORY = 10;
 
-// E-commerce re-engagement (in-memory — known limitation, resets on restart)
-const reEngagementTrackers = {};
-const RE_ENGAGE_DELAY_MS = 30 * 60 * 1000;
+// E-commerce re-engagement (persistent — driven by conversations.next_reengagement_at)
+const ECOM_REENGAGE_HOURS = 0.5; // 30 min, matches the original single-shot design
 const orderConfirmedState = {};
 
-// Conversations logged once per customer per server session
-const loggedConversations = {};
+// Trial-expiry WhatsApp warning, sent via the 'owner' notifier connection
+const TRIAL_WARNING_DAYS = 3;
 
 // Real estate follow-ups (persistent — driven by leads.next_followup_at)
 const FOLLOWUP_FIRST_HOURS  = 24;
@@ -55,15 +54,35 @@ function addToHistory(vendorId, from, role, content) {
   }
 }
 
+// Simple "a conversation happened" log used for analytics by both product
+// lines. Upserts with ignoreDuplicates so it's safe to call on every message
+// without an in-memory guard — survives restarts cleanly.
 async function logConversation(vendorId, from) {
   if (vendorId === 'owner') return;
-  const convKey = `${vendorId}:${from}`;
-  if (loggedConversations[convKey]) return;
-  loggedConversations[convKey] = true;
-  await supabase.from('conversations').insert([{
-    vendor_id:      parseInt(vendorId),
-    customer_phone: phoneFromJid(from)
-  }]);
+  try {
+    await supabase.from('conversations').upsert(
+      [{ vendor_id: parseInt(vendorId), customer_phone: phoneFromJid(from) }],
+      { onConflict: 'vendor_id,customer_phone', ignoreDuplicates: true }
+    );
+  } catch (e) {
+    console.error('[logConversation] error:', e.message);
+  }
+}
+
+// Ecommerce-only: on every inbound customer message, (re)schedule a single
+// re-engagement nudge if they later go quiet. Persisted so it survives a
+// Render restart, unlike the old in-memory timer.
+async function upsertEcommerceConversation(vendorId, from) {
+  const payload = {
+    vendor_id:            parseInt(vendorId),
+    customer_phone:       phoneFromJid(from),
+    jid:                  from,
+    closed:                false,
+    next_reengagement_at: hoursFromNow(ECOM_REENGAGE_HOURS)
+  };
+  const { error } = await supabase.from('conversations')
+    .upsert([payload], { onConflict: 'vendor_id,customer_phone' });
+  if (error) console.error('[EcomConversation] upsert error:', error.message);
 }
 
 async function notifyVendorWhatsApp(vendorId, vendor, text) {
@@ -77,38 +96,22 @@ async function notifyVendorWhatsApp(vendorId, vendor, text) {
   }
 }
 
-// ─── E-COMMERCE RE-ENGAGEMENT (in-memory) ────────────────────────────────────
-
-function clearReEngageTimer(vendorId, from) {
-  if (reEngagementTrackers[vendorId]?.[from]?.timer) {
-    clearTimeout(reEngagementTrackers[vendorId][from].timer);
+// Sends a message from Nexua's own "owner" WhatsApp connection to any phone
+// number — used for vendor approval messages and trial-expiry warnings, since
+// a vendor who hasn't connected their own bot yet has no other inbox we can
+// reach them through.
+async function notifyViaOwner(toNumber, message) {
+  const conn = connections['owner'];
+  if (!conn?.isReady) return { success: false, error: 'Notifier number not connected' };
+  const digits = String(toNumber || '').replace(/\D/g, '');
+  if (!digits) return { success: false, error: 'Invalid phone number' };
+  const jid = digits + '@s.whatsapp.net';
+  try {
+    await conn.sock.sendMessage(jid, { text: message });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
-}
-
-function scheduleReEngage(vendorId, from, sock, vendorName, products, country, botInstructions) {
-  clearReEngageTimer(vendorId, from);
-  if (!reEngagementTrackers[vendorId]) reEngagementTrackers[vendorId] = {};
-  reEngagementTrackers[vendorId][from] = {
-    lastTime: Date.now(),
-    nudged: false,
-    timer: setTimeout(async () => {
-      try {
-        const tracker = reEngagementTrackers[vendorId]?.[from];
-        if (!tracker || tracker.nudged) return;
-        tracker.nudged = true;
-        const history = getHistory(vendorId, from);
-        if (!history.length) return;
-        const lastMsg = history[history.length - 1];
-        if (lastMsg.role === 'assistant') return;
-        const nudge = await ai.generateReEngageReply(vendorName, products, country, botInstructions);
-        await sock.sendMessage(from, { text: nudge });
-        console.log(`[${vendorName}] Re-engagement sent to ${from}`);
-        addToHistory(vendorId, from, 'assistant', nudge);
-      } catch (err) {
-        console.error(`[${vendorName}] Re-engage error:`, err.message);
-      }
-    }, RE_ENGAGE_DELAY_MS)
-  };
 }
 
 // ─── SESSION ─────────────────────────────────────────────────────────────────
@@ -134,7 +137,7 @@ async function handleEcommerce({ sock, vendorId, vendorName, from, text, vendor 
   const country         = vendor?.country          || 'Nigeria';
   const botInstructions = vendor?.bot_instructions || '';
 
-  await logConversation(vendorId, from);
+  await upsertEcommerceConversation(vendorId, from);
   addToHistory(vendorId, from, 'user', text);
 
   const history  = getHistory(vendorId, from);
@@ -170,6 +173,10 @@ async function handleEcommerce({ sock, vendorId, vendorName, from, text, vendor 
     if (orderError) console.error(`[${vendorName}] Order insert error:`, orderError.message);
     else console.log(`[${vendorName}] Order saved to Supabase ✅`);
 
+    await supabase.from('conversations')
+      .update({ closed: true, next_reengagement_at: null })
+      .eq('vendor_id', vendorIdVal).eq('customer_phone', customerPhone);
+
     await supabase.from('notifications').insert([{
       vendor_id: vendorIdVal,
       type:      'order',
@@ -192,6 +199,9 @@ Reply to the customer directly to confirm delivery details.`);
 
   if (handoffNeeded) {
     console.log(`[${vendorName}] Handoff requested by ${from}`);
+    await supabase.from('conversations')
+      .update({ closed: true, next_reengagement_at: null })
+      .eq('vendor_id', vendorIdVal).eq('customer_phone', customerPhone);
     await supabase.from('notifications').insert([{
       vendor_id: vendorIdVal,
       type:      'handoff',
@@ -202,8 +212,6 @@ Reply to the customer directly to confirm delivery details.`);
     await notifyVendorWhatsApp(vendorId, vendor,
       `🙋 *Customer Wants to Talk!*\n\nA customer is asking to speak with a human.\n📞 Their number: ${customerPhone}\n\nReply to them directly on WhatsApp.`);
   }
-
-  scheduleReEngage(vendorId, from, sock, vendorName, products || [], country, botInstructions);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -500,10 +508,104 @@ async function sweepExpiredVendors() {
   }
 }
 
+// Ecommerce equivalent of runFollowUps — sends at most one nudge per
+// conversation to a customer who went quiet, then never bothers them again.
+async function runEcommerceReEngage() {
+  try {
+    const { data: due, error } = await supabase
+      .from('conversations')
+      .select('*')
+      .lte('next_reengagement_at', new Date().toISOString())
+      .eq('closed', false)
+      .lt('reengage_count', 1)
+      .limit(20);
+    if (error) { console.error('[EcomReEngage] Query error:', error.message); return; }
+
+    for (const conv of due || []) {
+      const vendorId = String(conv.vendor_id);
+      const conn = connections[vendorId];
+      if (!conn?.isReady) continue; // retry next cycle once vendor is connected
+
+      const { data: vendor } = await supabase.from('vendors').select(VENDOR_FIELDS).eq('id', conv.vendor_id).single();
+      if (!vendor || vendor.product_type === 'real_estate' || vendor.active === false || isSubscriptionExpired(vendor)) {
+        await supabase.from('conversations').update({ next_reengagement_at: null }).eq('id', conv.id);
+        continue;
+      }
+
+      const jid = conv.jid || `${conv.customer_phone}@s.whatsapp.net`;
+
+      // Don't nudge if the bot already has the last word in this thread
+      const history = getHistory(vendorId, jid);
+      const lastMsg = history[history.length - 1];
+      if (lastMsg && lastMsg.role === 'assistant') {
+        await supabase.from('conversations').update({ next_reengagement_at: null }).eq('id', conv.id);
+        continue;
+      }
+
+      try {
+        const { data: products } = await supabase.from('products').select('*').eq('active', true).eq('vendor_id', conv.vendor_id);
+        const nudge = await ai.generateReEngageReply(vendor.business_name, products || [], vendor.country || 'Nigeria', vendor.bot_instructions || '');
+        await conn.sock.sendMessage(jid, { text: nudge });
+        addToHistory(vendorId, jid, 'assistant', nudge);
+        console.log(`[${vendor.business_name}] Re-engagement sent to ${conv.customer_phone}`);
+
+        await supabase.from('conversations').update({
+          reengage_count: (conv.reengage_count || 0) + 1,
+          next_reengagement_at: null
+        }).eq('id', conv.id);
+      } catch (err) {
+        console.error(`[EcomReEngage] Failed for conversation ${conv.id}:`, err.message);
+        await supabase.from('conversations').update({ next_reengagement_at: hoursFromNow(1) }).eq('id', conv.id);
+      }
+    }
+  } catch (err) {
+    console.error('[EcomReEngage] Worker error:', err.message);
+  }
+}
+
+// Sends one WhatsApp warning per vendor as their trial/plan period nears or
+// reaches its end. trial_warning_sent_at makes this fire-once per period —
+// it gets cleared whenever a new plan period is activated (see server.js).
+async function checkTrialWarnings() {
+  try {
+    const warnBefore = new Date(Date.now() + TRIAL_WARNING_DAYS * 24 * 3600 * 1000).toISOString();
+    const { data: vendors, error } = await supabase
+      .from('vendors')
+      .select('id, business_name, whatsapp_number, trial_ends_at, subscription_status, active')
+      .eq('active', true)
+      .is('trial_warning_sent_at', null)
+      .not('trial_ends_at', 'is', null)
+      .lte('trial_ends_at', warnBefore);
+    if (error) { console.error('[TrialWarning] Query error:', error.message); return; }
+
+    for (const vendor of vendors || []) {
+      if (['expired', 'cancelled'].includes(vendor.subscription_status)) continue;
+      if (!vendor.whatsapp_number) continue;
+
+      const daysLeft = Math.max(0, Math.ceil((new Date(vendor.trial_ends_at) - new Date()) / (24 * 3600 * 1000)));
+      const message = daysLeft > 0
+        ? `⏰ Hi! Your OrderFlow plan for *${vendor.business_name}* ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}. Renew to keep your WhatsApp bot running without interruption.`
+        : `⚠️ Your OrderFlow plan for *${vendor.business_name}* has ended and your bot has paused. Renew any time to bring it back online.`;
+
+      const sent = await notifyViaOwner(vendor.whatsapp_number, message);
+      if (sent.success) {
+        await supabase.from('vendors').update({ trial_warning_sent_at: new Date().toISOString() }).eq('id', vendor.id);
+        console.log(`[TrialWarning] Sent to ${vendor.business_name}`);
+      } else {
+        console.error(`[TrialWarning] Could not send to ${vendor.business_name}:`, sent.error);
+      }
+    }
+  } catch (err) {
+    console.error('[TrialWarning] Worker error:', err.message);
+  }
+}
+
 function startFollowUpWorker() {
   console.log('[FollowUp] Worker started (every 5 min)');
   setInterval(runFollowUps, FOLLOWUP_CHECK_MS);
   setInterval(sweepExpiredVendors, FOLLOWUP_CHECK_MS);
+  setInterval(runEcommerceReEngage, FOLLOWUP_CHECK_MS);
+  setInterval(checkTrialWarnings, FOLLOWUP_CHECK_MS);
   setTimeout(runFollowUps, 60 * 1000); // first pass 1 min after boot, lets sessions reconnect
 }
 
@@ -667,6 +769,10 @@ function getQR(vendorId) {
   return qrCodes[vendorId] || null;
 }
 
+function isConnected(vendorId) {
+  return !!connections[vendorId]?.isReady;
+}
+
 async function sendWhatsApp(vendorId, to, message) {
   const conn = connections[vendorId];
   if (!conn?.isReady) throw new Error(`Vendor ${vendorId} WhatsApp not connected`);
@@ -674,4 +780,4 @@ async function sendWhatsApp(vendorId, to, message) {
   await conn.sock.sendMessage(jid, { text: message });
 }
 
-module.exports = { connectVendor, getQR, sendWhatsApp, startFollowUpWorker, clearSession, reconnectTries, sendInitialOutreach, disconnectVendor };
+module.exports = { connectVendor, getQR, sendWhatsApp, startFollowUpWorker, clearSession, reconnectTries, sendInitialOutreach, disconnectVendor, notifyViaOwner, isConnected, handleRealEstate, handleEcommerce };

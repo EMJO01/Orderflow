@@ -34,7 +34,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .vendor-avatar{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#1aad52,#128C7E);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;flex-shrink:0;}
 .vendor-name{font-weight:600;font-size:13px;}
 .vendor-plan{font-size:11px;color:var(--accent);background:var(--accent-dim);padding:1px 6px;border-radius:4px;margin-top:2px;display:inline-block;}
-.logout-btn{margin-top:10px;width:100%;padding:7px;background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;}
+.sidebar-links{display:flex;gap:8px;margin-top:10px;}
+.sidebar-link-btn{flex:1;padding:7px;background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font-size:11.5px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;}
+.sidebar-link-btn:hover{border-color:var(--accent);color:var(--text);}
+.logout-btn{background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;}
 .logout-btn:hover{border-color:var(--red);color:var(--red);}
 .main{flex:1;overflow-y:auto;min-width:0;}
 .topbar{padding:20px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface);position:sticky;top:0;z-index:50;gap:12px;}
@@ -124,7 +127,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .form-row{margin-bottom:18px;}
 .form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;}
 label{display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:7px;}
-input[type=text],input[type=number],textarea,select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s;}
+input[type=text],input[type=number],input[type=password],textarea,select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s;}
 input:focus,textarea:focus,select:focus{border-color:var(--accent);}
 input::placeholder,textarea::placeholder{color:var(--muted);}
 select option{background:var(--surface2);}
@@ -170,7 +173,6 @@ textarea{resize:vertical;min-height:70px;}
 .notif-unread-dot{width:7px;height:7px;background:var(--accent);border-radius:50%;flex-shrink:0;margin-top:5px;}
 .analytics-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
 
-/* ═════════ MOBILE RESPONSIVE ═════════ */
 @media (max-width: 860px){
   .shell{flex-direction:column;}
   .sidebar{position:fixed;top:0;left:0;height:100vh;z-index:200;transform:translateX(-100%);transition:transform .25s ease;box-shadow:2px 0 24px rgba(0,0,0,.5);}
@@ -252,7 +254,10 @@ textarea{resize:vertical;min-height:70px;}
           <div class="vendor-plan">Active</div>
         </div>
       </div>
-      <button class="logout-btn" onclick="logout()">Sign out</button>
+      <div class="sidebar-links">
+        <button class="sidebar-link-btn" onclick="openPasswordModal()">Change password</button>
+        <button class="sidebar-link-btn logout-btn" onclick="logout()">Sign out</button>
+      </div>
     </div>
   </aside>
 
@@ -267,7 +272,6 @@ textarea{resize:vertical;min-height:70px;}
       </div>
     </div>
 
-    <!-- PRODUCTS PAGE -->
     <div class="content" id="page-products">
       <div class="stats">
         <div class="stat-card green"><div class="stat-label">Total Products</div><div class="stat-value" id="stat-total">0</div><div class="stat-change">Your catalog</div></div>
@@ -286,7 +290,6 @@ textarea{resize:vertical;min-height:70px;}
       </div>
     </div>
 
-    <!-- WHATSAPP PAGE -->
     <div class="content" id="page-whatsapp" style="display:none;">
       <div class="wa-banner" id="wa-banner">
         <div class="wa-banner-inner">
@@ -312,7 +315,6 @@ textarea{resize:vertical;min-height:70px;}
       </div>
     </div>
 
-    <!-- BOT TRAINING PAGE -->
     <div class="content" id="page-training" style="display:none;">
       <div class="training-card">
         <div class="training-title">🧠 Train Your Bot</div>
@@ -340,7 +342,6 @@ textarea{resize:vertical;min-height:70px;}
       </div>
     </div>
 
-    <!-- ORDERS PAGE -->
     <div class="content" id="page-orders" style="display:none;">
       <div class="section-header"><div class="section-title">Orders</div></div>
       <div class="products-table">
@@ -351,7 +352,6 @@ textarea{resize:vertical;min-height:70px;}
       </div>
     </div>
 
-    <!-- NOTIFICATIONS PAGE -->
     <div class="content" id="page-notifications" style="display:none;">
       <div class="section-header">
         <div class="section-title">🔔 Notifications</div>
@@ -362,7 +362,6 @@ textarea{resize:vertical;min-height:70px;}
       </div>
     </div>
 
-    <!-- ANALYTICS PAGE -->
     <div class="content" id="page-analytics" style="display:none;">
       <div class="stats" style="margin-bottom:24px;">
         <div class="stat-card green"><div class="stat-label">Total Revenue</div><div class="stat-value" id="an-revenue">₦0</div><div class="stat-change">All time</div></div>
@@ -392,7 +391,6 @@ textarea{resize:vertical;min-height:70px;}
   </div>
 </div>
 
-<!-- Product Modal -->
 <div class="modal-overlay" id="modal">
   <div class="modal">
     <div class="modal-header">
@@ -429,12 +427,29 @@ textarea{resize:vertical;min-height:70px;}
   </div>
 </div>
 
+<div class="modal-overlay" id="password-modal">
+  <div class="modal" style="width:420px;">
+    <div class="modal-header">
+      <div class="modal-title">Change Password</div>
+      <button class="close-btn" onclick="closePasswordModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label>Current Password</label><input type="password" id="pw-current" placeholder="••••••••"></div>
+      <div class="form-row"><label>New Password</label><input type="password" id="pw-new" placeholder="At least 6 characters"></div>
+      <div class="form-row"><label>Confirm New Password</label><input type="password" id="pw-confirm" placeholder="Repeat new password"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closePasswordModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="savePassword()">Save Password</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 const API = 'https://rady-bot.onrender.com';
 
-// Sends the login token with every API call, and signs out if the server rejects it
 const _nativeFetch = window.fetch.bind(window);
 window.fetch = async (url, opts = {}) => {
   const isApi = String(url).startsWith(API);
@@ -457,8 +472,6 @@ const CURRENCY_MAP = {
 };
 function getCurrency() { return CURRENCY_MAP[vendor?.country] || '₦'; }
 
-// ── MOBILE SIDEBAR ────────────────────────────────────────────────────────────
-
 function toggleSidebar() {
   document.querySelector('.sidebar').classList.toggle('open');
   document.getElementById('sidebar-backdrop').classList.toggle('open');
@@ -467,8 +480,6 @@ function closeSidebar() {
   document.querySelector('.sidebar').classList.remove('open');
   document.getElementById('sidebar-backdrop').classList.remove('open');
 }
-
-// ── AUTH ──────────────────────────────────────────────────────────────────────
 
 async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
@@ -513,8 +524,6 @@ function initDashboard() {
 const saved = localStorage.getItem('rady_vendor');
 if (saved) { vendor = JSON.parse(saved); initDashboard(); }
 
-// ── NAVIGATION ────────────────────────────────────────────────────────────────
-
 function showPage(page, el) {
   ['products','whatsapp','training','orders','notifications','analytics'].forEach(p => {
     document.getElementById(`page-${p}`).style.display = 'none';
@@ -531,7 +540,26 @@ function showPage(page, el) {
   if (page === 'analytics') loadAnalytics();
 }
 
-// ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
+function openPasswordModal() {
+  ['pw-current','pw-new','pw-confirm'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('password-modal').classList.add('open');
+}
+function closePasswordModal() { document.getElementById('password-modal').classList.remove('open'); }
+
+async function savePassword() {
+  const current = document.getElementById('pw-current').value;
+  const next    = document.getElementById('pw-new').value;
+  const confirmVal = document.getElementById('pw-confirm').value;
+  if (!current || !next) { showToast('⚠️ Fill in both password fields'); return; }
+  if (next.length < 6) { showToast('⚠️ New password must be at least 6 characters'); return; }
+  if (next !== confirmVal) { showToast('⚠️ New passwords do not match'); return; }
+  try {
+    const res  = await fetch(`${API}/vendors/${vendor.id}/password`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ current_password: current, new_password: next }) });
+    const data = await res.json();
+    if (data.success) { showToast('✅ Password updated!'); closePasswordModal(); }
+    else showToast('⚠️ ' + (data.error || 'Could not update password'));
+  } catch(e) { showToast('⚠️ Could not reach server.'); }
+}
 
 async function loadNotificationCount() {
   if (!vendor) return;
@@ -597,8 +625,6 @@ function timeAgo(dateStr) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-// ── BOT TRAINING ──────────────────────────────────────────────────────────────
-
 function addExample(text) {
   const ta = document.getElementById('bot-instructions');
   ta.value = ta.value ? ta.value + '\n' + text : text;
@@ -617,8 +643,6 @@ async function saveInstructions() {
     }
   } catch(e) { showToast('⚠️ Could not save instructions.'); }
 }
-
-// ── WHATSAPP ──────────────────────────────────────────────────────────────────
 
 let waConnected = false;
 
@@ -724,8 +748,6 @@ async function startQR() {
   }, 3000);
 }
 
-// ── STATS & ORDERS ────────────────────────────────────────────────────────────
-
 async function loadStats() {
   if (!vendor) return;
   try {
@@ -772,8 +794,6 @@ async function updateOrderStatus(id, status) {
     showToast('✓ Order status updated');
   } catch(e) { showToast('⚠️ Could not update status.'); }
 }
-
-// ── PRODUCTS ──────────────────────────────────────────────────────────────────
 
 async function loadProducts() {
   if (!vendor) return;
@@ -869,10 +889,9 @@ function selectEmoji(e, el) { selectedEmoji = e; document.querySelectorAll('.emo
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3000); }
 
 document.getElementById('modal').addEventListener('click', e => { if(e.target===document.getElementById('modal')) closeModal(); });
+document.getElementById('password-modal').addEventListener('click', e => { if(e.target===document.getElementById('password-modal')) closePasswordModal(); });
 document.getElementById('login-email').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
-
-// ── ANALYTICS ─────────────────────────────────────────────────────────────────
 
 let revenueChart, conversionChart, statusChart;
 

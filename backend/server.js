@@ -7,6 +7,7 @@ require('dotenv').config();
 const supabase = require('./db');
 const crypto = require('crypto');
 const { connectVendor, getQR, startFollowUpWorker, sendInitialOutreach, disconnectVendor, notifyViaOwner, isConnected } = require('./whatsapp');
+const { handleJarvisMessage } = require('./jarvis');
 
 // A WhatsApp connection error should never take the whole server down for every vendor.
 // The error is logged so it shows up in Render Logs.
@@ -31,7 +32,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
-app.use(express.json());
+app.disable('x-powered-by');
+app.use(express.json({ limit: '100kb' }));
 
 if (!process.env.ADMIN_PASSWORD || !process.env.JWT_SECRET) {
   console.error('WARNING: ADMIN_PASSWORD or JWT_SECRET is not set. Admin login will fail.');
@@ -76,8 +78,8 @@ const ownsRow = table => async (req, res, next) => {
 const importLimiter = rateLimit({ windowMs: 60 * 1000, max: 30 }); // 30 leads/min per IP
 
 async function apiKeyAuth(req, res, next) {
-  const key = req.headers['x-api-key'] || req.query.api_key;
-  if (!key) return res.status(401).json({ error: 'Missing API key. Pass it as the x-api-key header.' });
+  const key = req.headers['x-api-key'];
+  if (!key) return res.status(401).json({ error: 'Missing API key. Pass it in the x-api-key header (query-string keys are not accepted).' });
   const { data: vendor } = await supabase.from('vendors').select('*').eq('api_key', key).single();
   if (!vendor) return res.status(401).json({ error: 'Invalid API key' });
   if (!vendor.active) return res.status(403).json({ error: 'Vendor not approved' });
@@ -319,15 +321,17 @@ app.put('/viewings/:id', auth, ownsRow('viewings'), async (req, res) => {
 // ─── AUTH (ecommerce) ───────────────────────────────────────────────────────────
 
 app.post('/signup', async (req, res) => {
-  const { name, business_name, email, whatsapp_number, business_type, about, password, country } = req.body;
+  const { name, business_name, email, whatsapp_number, business_type, about, password, country, accepted_terms } = req.body;
   if (!password || String(password).length < 6) return res.json({ success: false, error: 'Password must be at least 6 characters' });
+  if (accepted_terms !== true) return res.json({ success: false, error: 'Please accept the Terms and Privacy Policy to continue' });
   const { data: existing } = await supabase.from('vendors').select('id').eq('email', email).single();
   if (existing) return res.json({ success: false, error: 'Email already registered' });
   const { data, error } = await supabase
     .from('vendors')
     .insert([{
       name, business_name, email, whatsapp_number, business_type, about, password: await bcrypt.hash(String(password), 10),
-      active: false, country: country || 'Nigeria', product_type: 'ecommerce'
+      active: false, country: country || 'Nigeria', product_type: 'ecommerce',
+      terms_accepted_at: new Date().toISOString(), terms_version: '2026-10-19'
     }])
     .select();
   if (error) return res.json({ success: false, error: error.message });
@@ -338,8 +342,9 @@ app.post('/signup', async (req, res) => {
 // ─── AUTH (real estate) ─────────────────────────────────────────────────────────
 
 app.post('/signup-re', async (req, res) => {
-  const { name, business_name, email, whatsapp_number, about, password, country } = req.body;
+  const { name, business_name, email, whatsapp_number, about, password, country, accepted_terms } = req.body;
   if (!password || String(password).length < 6) return res.json({ success: false, error: 'Password must be at least 6 characters' });
+  if (accepted_terms !== true) return res.json({ success: false, error: 'Please accept the Terms and Privacy Policy to continue' });
   const { data: existing } = await supabase.from('vendors').select('id').eq('email', email).single();
   if (existing) return res.json({ success: false, error: 'Email already registered' });
 
@@ -351,6 +356,7 @@ app.post('/signup-re', async (req, res) => {
       name, business_name, email, whatsapp_number,
       business_type: 'real_estate_agent', about, password: await bcrypt.hash(String(password), 10),
       active: false, country: country || 'Nigeria',
+      terms_accepted_at: new Date().toISOString(), terms_version: '2026-10-19',
       product_type: 'real_estate', plan: 'trial',
       subscription_status: 'trialing', trial_ends_at
     }])
@@ -530,6 +536,7 @@ app.get('/admin/notifier/qr-image', (req, res) => {
   if (qr) {
     return res.json({
       status: 'ready',
+      qr,
       url: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`
     });
   }
@@ -538,6 +545,26 @@ app.get('/admin/notifier/qr-image', (req, res) => {
 
 app.get('/admin/notifier/status', (req, res) => {
   res.json({ connected: isConnected('owner') });
+});
+
+// ─── JARVIS (admin assistant number) ────────────────────────────────────────────
+app.post('/admin/jarvis/connect', (req, res) => {
+  connectVendor('jarvis', 'Jarvis');
+  res.json({ success: true });
+});
+
+app.get('/admin/jarvis/qr-image', (req, res) => {
+  const qr = getQR('jarvis');
+  if (qr) return res.json({ status: 'ready', qr });
+  res.status(202).json({ status: 'not_ready' });
+});
+
+app.get('/admin/jarvis/status', (req, res) => res.json({ connected: isConnected('jarvis') }));
+
+// Test without WhatsApp: the admin JWT already proves who you are
+app.post('/admin/jarvis/test', async (req, res) => {
+  const reply = await handleJarvisMessage({ trusted: true, text: String(req.body.text || '') });
+  res.json({ reply });
 });
 
 // ─── WHATSAPP ───────────────────────────────────────────────────────────────────
@@ -556,6 +583,7 @@ app.get('/vendors/:id/qr-image', auth, ownParam, (req, res) => {
   if (qr) {
     return res.json({
       status: 'ready',
+      qr,
       url: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`
     });
   }
@@ -797,5 +825,6 @@ app.listen(PORT, () => {
   console.log(`Nexua OrderFlow server running on port ${PORT}`);
   reconnectActiveVendors();
   connectVendor('owner', 'Nexua Notifications'); // no-op until scanned once from admin
+  connectVendor('jarvis', 'Jarvis');             // no-op until scanned once
   startFollowUpWorker();
 });

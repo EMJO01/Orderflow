@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://eminnbot.netlify.app/sitemap.xml

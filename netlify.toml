@@ -1,0 +1,26 @@
+# Merge into your existing netlify.toml if you already have one.
+# 404.html in the publish folder is served automatically for unknown URLs.
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Private areas: keep out of search results. Do NOT list these in robots.txt,
+# because a Disallow would stop search engines from ever seeing the noindex.
+[[headers]]
+  for = "/dashboard*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    X-Frame-Options = "DENY"
+[[headers]]
+  for = "/admin*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    X-Frame-Options = "DENY"
+[[headers]]
+  for = "/nexua-admin*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    X-Frame-Options = "DENY"

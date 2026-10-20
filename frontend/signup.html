@@ -3,7 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nexua OrderFlow — Get Started</title>
+<title>Sign up for OrderFlow — WhatsApp AI Ordering</title>
+<meta name="description" content="Create your OrderFlow account and set up an AI assistant that takes orders on your WhatsApp number.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://eminnbot.netlify.app/signup">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0f1b2d">
+<meta property="og:site_name" content="OrderFlow by Nexua">
+<meta property="og:title" content="Sign up for OrderFlow — WhatsApp AI Ordering">
+<meta property="og:description" content="Create your OrderFlow account and set up an AI assistant that takes orders on your WhatsApp number.">
+<meta property="og:type" content="website">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -140,6 +149,12 @@ textarea{resize:vertical;min-height:80px;}
         <input type="password" id="f-password" placeholder="Min 6 characters">
       </div>
 
+      <label style="display:flex;gap:10px;align-items:flex-start;font-size:14px">
+        <input type="checkbox" id="terms" required>
+        <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and
+        <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+      </label>
+
       <button class="btn btn-primary" id="signup-btn" onclick="submitSignup()">Create My Account →</button>
 
       <div class="divider"><span>already have an account?</span></div>
@@ -187,12 +202,19 @@ async function submitSignup() {
   btn.disabled = true;
   btn.textContent = 'Submitting...';
   document.getElementById('error-box').style.display = 'none';
+  const accepted_terms = document.getElementById('terms').checked;
+  if (!accepted_terms) {
+    showError('You must accept the Terms and Privacy Policy');
+    btn.disabled = false;
+    btn.textContent = 'Create My Account →';
+    return;
+  }
 
   try {
     const res = await fetch(`${API}/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, business_name: business, email, whatsapp_number: whatsapp, business_type: type, about, password, country })
+      body: JSON.stringify({ name, business_name: business, email, whatsapp_number: whatsapp, business_type: type, about, password, country, accepted_terms })
     });
     const data = await res.json();
     if (data.success) {

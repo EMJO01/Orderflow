@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Nexua OrderFlow — Vendor Dashboard</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0f1b2d">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -213,6 +216,7 @@ textarea{resize:vertical;min-height:70px;}
   .login-box{padding:28px 22px;}
 }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -713,12 +717,12 @@ async function startQR() {
     try {
       const res  = await fetch(`${API}/vendors/${vendor.id}/qr-image`);
       const data = await res.json();
-      if (data.status === 'ready' && data.url && !qrShown) {
-        qrShown = true;
+      if (data.status === 'ready' && data.qr && !qrShown) {
+        qrShown = true; const qrText = data.qr; setTimeout(() => { const el = document.getElementById("qr-canvas"); if (el && window.QRCode) { el.innerHTML = ""; new QRCode(el, { text: qrText, width: 220, height: 220 }); } }, 0);
         clearInterval(stepTimer);
         qrContent.innerHTML = `
           <div class="qr-frame">
-            <div class="qr-box"><img src="${data.url}" style="width:220px;height:220px;display:block;border-radius:8px;" alt="QR Code"/></div>
+            <div class="qr-box"><div id="qr-canvas" style="width:220px;height:220px;display:block;border-radius:8px;"></div></div>
             <div class="qr-steps">
               <div class="qr-step"><div class="qr-num">1</div><div>Open WhatsApp on your phone</div></div>
               <div class="qr-step"><div class="qr-num">2</div><div>Tap <strong>⋮ → Linked Devices → Link a Device</strong></div></div>

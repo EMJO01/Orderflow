@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Start your free trial — OrderFlow RE</title>
+<meta name="description" content="Create your OrderFlow RE account to qualify prospects and book viewings on WhatsApp.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://eminnbot.netlify.app/signup-re">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0f1b2d">
+<meta property="og:site_name" content="OrderFlow by Nexua">
+<meta property="og:title" content="Start your free trial — OrderFlow RE">
+<meta property="og:description" content="Create your OrderFlow RE account to qualify prospects and book viewings on WhatsApp.">
+<meta property="og:type" content="website">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -112,6 +121,11 @@ textarea{resize:vertical; min-height:64px;}
         </div>
         <div class="form-row"><label>Password</label><input type="password" id="f-password" placeholder="Create a password"></div>
         <div class="form-row"><label>About your business (optional)</label><textarea id="f-about" placeholder="A few words about what you specialize in — rentals, sales, land, shortlets..."></textarea></div>
+        <label style="display:flex;gap:10px;align-items:flex-start;font-size:14px">
+          <input type="checkbox" id="terms" required>
+          <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and
+          <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+        </label>
         <button class="btn btn-gold" id="submit-btn" onclick="doSignup()">Start free trial</button>
         <div class="hint" style="text-align:center;margin-top:14px;">By signing up you agree to be contacted about your trial and account status.</div>
       </form>
@@ -154,6 +168,11 @@ async function doSignup() {
     showMsg('Password should be at least 6 characters.', 'error');
     return;
   }
+  const accepted_terms = document.getElementById('terms').checked;
+  if (!accepted_terms) {
+    showMsg('You must accept the Terms and Privacy Policy.', 'error');
+    return;
+  }
 
   const btn = document.getElementById('submit-btn');
   btn.disabled = true;
@@ -165,7 +184,7 @@ async function doSignup() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name, business_name: business, email,
-        whatsapp_number: whatsapp, country, password, about
+        whatsapp_number: whatsapp, country, password, about, accepted_terms
       })
     });
     const data = await res.json();

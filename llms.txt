@@ -1,0 +1,18 @@
+# OrderFlow by Nexua
+
+> OrderFlow is a WhatsApp AI sales assistant for small businesses in Nigeria. It replies to customers on the business's own WhatsApp number, shows products, takes orders and alerts the owner. OrderFlow RE is the version for real estate agents: it qualifies prospects, matches listings, books viewings and follows up with quiet leads.
+
+How it works: the business signs up, is approved, scans a QR code to link its WhatsApp number, and adds products or property listings. Replies are written by AI. The owner can take over any chat.
+
+## Products
+- [OrderFlow](https://eminnbot.netlify.app/): for vendors selling products on WhatsApp
+- [OrderFlow RE](https://eminnbot.netlify.app/re-landing): for real estate agents and agencies
+
+## Policies
+- [Privacy Policy](https://eminnbot.netlify.app/privacy)
+- [Terms and Conditions](https://eminnbot.netlify.app/terms)
+- [Cookie Policy](https://eminnbot.netlify.app/cookies)
+- [Refund Policy](https://eminnbot.netlify.app/refunds)
+
+## Contact
+[[SUPPORT_EMAIL]]

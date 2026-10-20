@@ -3,6 +3,11 @@ const { Boom } = require('@hapi/boom');
 const { useSupabaseAuthState } = require('./auth-supabase');
 const supabase = require('./db');
 const ai = require('./ai');
+const jarvis = require('./jarvis');
+
+// Connections that belong to Nexua itself, not to a vendor row
+const SYSTEM_IDS = ['owner', 'jarvis'];
+const isSystem = id => SYSTEM_IDS.includes(String(id));
 
 const reconnectTries = {};
 const intentionalDisconnect = {}; // set before we call sock.end() ourselves so the close handler doesn't auto-reconnect
@@ -58,7 +63,7 @@ function addToHistory(vendorId, from, role, content) {
 // lines. Upserts with ignoreDuplicates so it's safe to call on every message
 // without an in-memory guard — survives restarts cleanly.
 async function logConversation(vendorId, from) {
-  if (vendorId === 'owner') return;
+  if (isSystem(vendorId)) return;
   try {
     await supabase.from('conversations').upsert(
       [{ vendor_id: parseInt(vendorId), customer_phone: phoneFromJid(from) }],
@@ -114,6 +119,38 @@ async function notifyViaOwner(toNumber, message) {
   }
 }
 
+// Handles inbound messages to the 'owner' connection. This number currently
+// doubles as Joanna's general/personal number, so it's reachable by anyone,
+// not just admins — this handler is intentionally static and inert. It must
+// NEVER call handleEcommerce or handleRealEstate: those pull a vendor's
+// catalog and can create orders, and 'owner' has no vendor row to scope to,
+// which previously meant it silently pulled every vendor's products into one
+// catalog and created orphaned orders with no vendor attached.
+//
+// This is a placeholder until a dedicated OrderFlow support number exists.
+// Jarvis (admin command/query access) will be a SEPARATE number with its own
+// handler and a hard sender allowlist — not built here, not this number.
+async function handleOwnerNumber({ sock, from, text }) {
+  const phone = phoneFromJid(from);
+  console.log(`[Nexua] Message to owner number (${text.length} chars)`);
+  const reply =
+    "Hi! Thanks for reaching out 🙏 This number isn't a vendor's order line — " +
+    "if you're trying to order from a specific business, please message the " +
+    "WhatsApp number they gave you directly. For anything else, a team member " +
+    "will get back to you here shortly.";
+  try {
+    await sock.sendMessage(from, { text: reply });
+  } catch (err) {
+    console.error(`[Nexua] Could not reply to ${phone}:`, err.message);
+  }
+}
+
+// Admin-only. All access control lives in jarvis.js (hard allowlist), not here.
+async function handleJarvisNumber({ sock, from, altJid, text }) {
+  const reply = await jarvis.handleJarvisMessage({ ids: [from, altJid], text });
+  if (reply) await sock.sendMessage(from, { text: reply });
+}
+
 // ─── SESSION ─────────────────────────────────────────────────────────────────
 
 async function clearSession(vendorId) {
@@ -130,9 +167,7 @@ async function clearSession(vendorId) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 async function handleEcommerce({ sock, vendorId, vendorName, from, text, vendor }) {
-  let query = supabase.from('products').select('*').eq('active', true);
-  if (vendorId !== 'owner') query = query.eq('vendor_id', vendorId);
-  const { data: products } = await query;
+  const { data: products } = await supabase.from('products').select('*').eq('active', true).eq('vendor_id', vendorId);
 
   const country         = vendor?.country          || 'Nigeria';
   const botInstructions = vendor?.bot_instructions || '';
@@ -142,7 +177,7 @@ async function handleEcommerce({ sock, vendorId, vendorName, from, text, vendor 
 
   const history  = getHistory(vendorId, from);
   const rawReply = await ai.generateReply(history, products || [], vendorName, country, botInstructions);
-  console.log(`[${vendorName}] Raw reply: ${rawReply}`);
+  console.log(`[${vendorName}] Reply generated (${rawReply.length} chars)`);
 
   const orderData     = ai.extractOrder(rawReply);
   const handoffNeeded = ai.extractHandoff(rawReply);
@@ -150,16 +185,16 @@ async function handleEcommerce({ sock, vendorId, vendorName, from, text, vendor 
   const finalReply    = cleanedText || '✅ Order confirmed! Our team will reach out to you shortly 🙌';
 
   await sock.sendMessage(from, { text: finalReply });
-  console.log(`[${vendorName}] Replied: ${finalReply}`);
+  console.log(`[${vendorName}] Replied (${finalReply.length} chars)`);
   addToHistory(vendorId, from, 'assistant', finalReply);
 
   const customerPhone = phoneFromJid(from);
-  const vendorIdVal   = vendorId === 'owner' ? null : parseInt(vendorId);
+  const vendorIdVal   = parseInt(vendorId);
 
   if (orderData) {
     if (!orderConfirmedState[vendorId]) orderConfirmedState[vendorId] = {};
     orderConfirmedState[vendorId][from] = true;
-    console.log(`[${vendorName}] Order detected:`, orderData);
+    console.log(`[${vendorName}] Order detected`);
 
     const { error: orderError } = await supabase.from('orders').insert([{
       vendor_id:        vendorIdVal,
@@ -331,7 +366,7 @@ async function handleRealEstate({ sock, vendorId, vendorName, from, text, vendor
   addToHistory(vendorId, from, 'user', text);
   const history  = getHistory(vendorId, from);
   const rawReply = await ai.generateREReply(history, properties, vendorName, country, botInstructions, lead);
-  console.log(`[${vendorName}] RE raw reply: ${rawReply}`);
+  console.log(`[${vendorName}] RE reply generated (${rawReply.length} chars)`);
 
   const leadUpdate    = ai.extractLeadUpdate(rawReply);
   const viewingData   = ai.extractViewing(rawReply);
@@ -342,7 +377,7 @@ async function handleRealEstate({ sock, vendorId, vendorName, from, text, vendor
     (viewingData ? '✅ Viewing request received! The agent will confirm your slot shortly 🙌' : 'Thanks for your message! 😊');
 
   await sock.sendMessage(from, { text: finalReply });
-  console.log(`[${vendorName}] Replied: ${finalReply}`);
+  console.log(`[${vendorName}] Replied (${finalReply.length} chars)`);
   addToHistory(vendorId, from, 'assistant', finalReply);
 
   if (!lead) return; // insert failed earlier — nothing more to persist
@@ -492,7 +527,7 @@ async function runFollowUps() {
 // for their next incoming message to notice. Frees the connection slot too.
 async function sweepExpiredVendors() {
   for (const vendorId of Object.keys(connections)) {
-    if (vendorId === 'owner') continue;
+    if (isSystem(vendorId)) continue;
     try {
       const { data: vendor } = await supabase
         .from('vendors').select('active, business_name, subscription_status, trial_ends_at')
@@ -662,7 +697,7 @@ async function connectVendor(vendorId, vendorName) {
       reconnectTries[vendorId] = 0;
       qrCodes[vendorId] = null;
       await saveCreds();
-      if (vendorId !== 'owner') {
+      if (!isSystem(vendorId)) {
         await supabase.from('vendors').update({ whatsapp_connected: true }).eq('id', vendorId);
       }
     }
@@ -675,7 +710,7 @@ async function connectVendor(vendorId, vendorName) {
       intentionalDisconnect[vendorId] = false;
       console.log(`${vendorName} disconnected. Code: ${statusCode}. Intentional: ${wasIntentional}. Reconnecting: ${shouldReconnect}`);
 
-      if (vendorId !== 'owner') {
+      if (!isSystem(vendorId)) {
         await supabase.from('vendors').update({ whatsapp_connected: false }).eq('id', vendorId);
       }
 
@@ -718,7 +753,21 @@ async function connectVendor(vendorId, vendorName) {
                  msg.message?.extendedTextMessage?.text || '';
     if (!text) return;
 
-    console.log(`[${vendorName}] Message from ${from}: ${text}`);
+    console.log(`[${vendorName}] Message received (${text.length} chars)`);
+
+    if (vendorId === 'jarvis') {
+      try {
+        const altJid = msg.key.senderPn || msg.key.remoteJidAlt || null;
+        await handleJarvisNumber({ sock, from, altJid, text });
+      } catch (err) { console.error('[Jarvis] Handler error:', err.message); }
+      return;
+    }
+
+    if (vendorId === 'owner') {
+      try { await handleOwnerNumber({ sock, from, text }); }
+      catch (err) { console.error('[Nexua] Owner-number handler error:', err.message); }
+      return;
+    }
 
     try {
       const { data: vendor } = await supabase
@@ -759,7 +808,7 @@ async function disconnectVendor(vendorId) {
   delete connections[vendorId];
   qrCodes[vendorId] = null;
   reconnectTries[vendorId] = 0;
-  if (vendorId !== 'owner') {
+  if (!isSystem(vendorId)) {
     await supabase.from('vendors').update({ whatsapp_connected: false }).eq('id', vendorId);
   }
   console.log(`[Vendor ${vendorId}] Disconnected intentionally`);
@@ -780,4 +829,4 @@ async function sendWhatsApp(vendorId, to, message) {
   await conn.sock.sendMessage(jid, { text: message });
 }
 
-module.exports = { connectVendor, getQR, sendWhatsApp, startFollowUpWorker, clearSession, reconnectTries, sendInitialOutreach, disconnectVendor, notifyViaOwner, isConnected, handleRealEstate, handleEcommerce };
+module.exports = { connectVendor, getQR, sendWhatsApp, startFollowUpWorker, clearSession, reconnectTries, sendInitialOutreach, disconnectVendor, notifyViaOwner, isConnected, isSubscriptionExpired };

@@ -479,9 +479,18 @@ const DASHBOARD_URLS = {
 
 app.put('/admin/vendors/:id', async (req, res) => {
   const { active } = req.body;
-  const { data: before } = await supabase.from('vendors').select('active, business_name, whatsapp_number, product_type, approved_notified').eq('id', req.params.id).single();
+  const { data: before } = await supabase.from('vendors').select('active, business_name, whatsapp_number, product_type, approved_notified, subscription_status').eq('id', req.params.id).single();
 
-  const { error } = await supabase.from('vendors').update({ active }).eq('id', req.params.id);
+  // The free trial starts when the vendor is first approved, not at signup, so approval time doesn't eat into it
+  const firstApproval = active === true && before && !before.active && !before.approved_notified;
+  const patch = { active };
+  if (firstApproval && (!before.subscription_status || before.subscription_status === 'trialing')) {
+    patch.plan = 'trial';
+    patch.subscription_status = 'trialing';
+    patch.trial_ends_at = new Date(Date.now() + TRIAL_DAYS * 24 * 3600 * 1000).toISOString();
+    patch.trial_warning_sent_at = null;
+  }
+  const { error } = await supabase.from('vendors').update(patch).eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
 
   // Deactivating should stop the bot immediately, not just on its next message
@@ -493,7 +502,7 @@ app.put('/admin/vendors/:id', async (req, res) => {
   if (active === true && before && !before.active && !before.approved_notified && before.whatsapp_number) {
     const dashboardUrl = DASHBOARD_URLS[before.product_type] || DASHBOARD_URLS.ecommerce;
     const sent = await notifyViaOwner(before.whatsapp_number,
-      `🎉 Hi! Your OrderFlow account for *${before.business_name}* has been approved. Log in here to get started: ${dashboardUrl}`);
+      `🎉 Hi! Your OrderFlow account for *${before.business_name}* has been approved and your ${TRIAL_DAYS}-day free trial starts now. Log in here to get started: ${dashboardUrl}`);
     if (sent.success) await supabase.from('vendors').update({ approved_notified: 'sent' }).eq('id', req.params.id);
     else console.error(`[Admin] Approval notification failed for vendor ${req.params.id}:`, sent.error);
   }

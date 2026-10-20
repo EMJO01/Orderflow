@@ -274,18 +274,26 @@ async function executeAction({ action, args }) {
 
   if (action === 'approve_vendor') {
     const { data: before } = await supabase.from('vendors')
-      .select('active, business_name, whatsapp_number, product_type, approved_notified').eq('id', id).single();
+      .select('active, business_name, whatsapp_number, product_type, approved_notified, subscription_status').eq('id', id).single();
     if (!before) return `Vendor ${id} not found.`;
     if (before.active) return `${before.business_name} is already active — nothing changed.`;
 
-    const { error } = await supabase.from('vendors').update({ active: true }).eq('id', id);
+    // Free trial (3 days) starts at first approval, same rule as the admin panel route
+    const patch = { active: true };
+    if (!before.approved_notified && (!before.subscription_status || before.subscription_status === 'trialing')) {
+      patch.plan = 'trial';
+      patch.subscription_status = 'trialing';
+      patch.trial_ends_at = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString();
+      patch.trial_warning_sent_at = null;
+    }
+    const { error } = await supabase.from('vendors').update(patch).eq('id', id);
     if (error) return `Could not approve: ${error.message}`;
 
     let note = '';
     if (!before.approved_notified && before.whatsapp_number) {
       const url = DASHBOARD_URLS[before.product_type] || DASHBOARD_URLS.ecommerce;
       const sent = await wa.notifyViaOwner(before.whatsapp_number,
-        `🎉 Hi! Your OrderFlow account for *${before.business_name}* has been approved. Log in here to get started: ${url}`);
+        `🎉 Hi! Your OrderFlow account for *${before.business_name}* has been approved and your 3-day free trial starts now. Log in here to get started: ${url}`);
       if (sent.success) {
         await supabase.from('vendors').update({ approved_notified: 'sent' }).eq('id', id);
         note = ' Approval message sent.';
@@ -532,4 +540,4 @@ async function handleJarvisMessage({ ids = [], text = '', trusted = false }) {
   }
 }
 
-module.exports = { handleJarvisMessage };w
+module.exports = { handleJarvisMessage };

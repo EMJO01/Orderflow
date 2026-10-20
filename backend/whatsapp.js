@@ -616,6 +616,8 @@ async function checkTrialWarnings() {
     for (const vendor of vendors || []) {
       if (['expired', 'cancelled'].includes(vendor.subscription_status)) continue;
       if (!vendor.whatsapp_number) continue;
+      // For short trials only warn in the final 24 hours (a 3-day trial would otherwise be warned immediately)
+      if (vendor.subscription_status === 'trialing' && new Date(vendor.trial_ends_at) - Date.now() > 24 * 3600 * 1000) continue;
 
       const daysLeft = Math.max(0, Math.ceil((new Date(vendor.trial_ends_at) - new Date()) / (24 * 3600 * 1000)));
       const message = daysLeft > 0

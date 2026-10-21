@@ -1,5 +1,6 @@
 const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
+const crypto = require('crypto');
 const { useSupabaseAuthState } = require('./auth-supabase');
 const supabase = require('./db');
 const ai = require('./ai');
@@ -30,7 +31,7 @@ const FOLLOWUP_MAX          = 2;
 const FOLLOWUP_CHECK_MS     = 5 * 60 * 1000;
 
 const VENDOR_FIELDS =
-  'active, country, bot_instructions, whatsapp_number, business_name, product_type, plan, subscription_status, trial_ends_at';
+  'active, country, bot_instructions, whatsapp_number, business_name, product_type, plan, subscription_status, trial_ends_at, bot_paused';
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -294,6 +295,7 @@ async function sendInitialOutreach(vendorId, lead, { customMessage, source } = {
   if (isSubscriptionExpired(vendor)) return { success: false, error: 'Subscription expired' };
 
   const jid = lead.jid || `${lead.phone}@s.whatsapp.net`;
+  if (await isChatSilenced(vendorId, jid, vendor)) return { success: false, error: 'This contact is paused or ignored, or the bot is paused' };
   const properties = await fetchAvailableProperties(parseInt(vendorId));
 
   let message;
@@ -493,6 +495,8 @@ async function runFollowUps() {
         continue;
       }
 
+      if (await isChatSilenced(vendorId, lead.jid || `${lead.phone}@s.whatsapp.net`, vendor)) continue; // paused or ignored: no nudge
+
       try {
         const properties = await fetchAvailableProperties(lead.vendor_id);
         const attempt    = (lead.followup_count || 0) + 1;
@@ -568,6 +572,7 @@ async function runEcommerceReEngage() {
       }
 
       const jid = conv.jid || `${conv.customer_phone}@s.whatsapp.net`;
+      if (await isChatSilenced(vendorId, jid, vendor)) continue; // paused or ignored: no nudge
 
       // Don't nudge if the bot already has the last word in this thread
       const history = getHistory(vendorId, jid);
@@ -650,6 +655,88 @@ function startFollowUpWorker() {
 // CONNECTION
 // ═════════════════════════════════════════════════════════════════════════════
 
+// ═════════════════════════════════════════════════════════════════════════════
+// CHAT CONTROL: pause the bot for everyone, pause or ignore one contact, and
+// auto-pause a chat when the owner types a reply from their own phone.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const botSent     = new Set(); // ids of messages the bot sent, so they are never mistaken for the owner typing
+const lastBotSend = {};        // `${vendorId}:${jid}` -> time of the bot's last send in that chat
+const lastMediaNotice = {};    // rate-limits the "I can't read that" reply per chat
+const AUTO_PAUSE_DEFAULT_HOURS = 2;
+
+function rememberBotId(id) {
+  botSent.add(id);
+  setTimeout(() => botSent.delete(id), 10 * 60 * 1000).unref?.();
+}
+
+function controlActive(c) {
+  if (!c) return false;
+  if (c.mode === 'ignore') return true;
+  return !c.paused_until || new Date(c.paused_until) > new Date();
+}
+
+async function getChatControl(vendorId, phone) {
+  const { data } = await supabase.from('chat_controls').select('*')
+    .eq('vendor_id', parseInt(vendorId)).eq('phone', phone).maybeSingle();
+  return data || null;
+}
+
+// True when the bot must stay quiet in this chat (global pause, ignored contact, or a pause still running)
+async function isChatSilenced(vendorId, jid, vendor) {
+  if (vendor?.bot_paused) return true;
+  return controlActive(await getChatControl(vendorId, phoneFromJid(jid)));
+}
+
+async function pauseChat(vendorId, phone, hours, source) {
+  const until = hours ? hoursFromNow(hours) : null;
+  const existing = await getChatControl(vendorId, phone);
+  if (existing && existing.mode === 'ignore') return;                 // never override an ignore
+  if (controlActive(existing) && (!existing.paused_until || (until && new Date(existing.paused_until) >= new Date(until)))) return; // keep a longer pause
+  const { error } = await supabase.from('chat_controls').upsert(
+    [{ vendor_id: parseInt(vendorId), phone, mode: 'pause', paused_until: until, source }],
+    { onConflict: 'vendor_id,phone' });
+  if (error) console.error('[ChatControl] pause error:', error.message);
+}
+
+// The owner typed in a chat from their own phone: stay quiet there for their chosen time
+async function handleOwnerTyped({ vendorId, msg }) {
+  const jid = msg.key.remoteJid;
+  if (!jid || jid === 'status@broadcast' || jid.endsWith('@g.us') || jid.endsWith('@broadcast') || jid.endsWith('@newsletter')) return;
+  if (botSent.has(msg.key.id)) return;                                           // the bot's own message
+  if (Date.now() - (lastBotSend[`${vendorId}:${jid}`] || 0) < 8000) return;       // echo of something the bot just sent
+  const ts = Number(msg.messageTimestamp?.toString?.() ?? msg.messageTimestamp ?? 0) * 1000;
+  if (ts && Date.now() - ts > 60 * 1000) return;                                  // old history, not a live reply
+  const { data: v } = await supabase.from('vendors').select('auto_pause_hours').eq('id', parseInt(vendorId)).single();
+  const hours = v && v.auto_pause_hours !== null && v.auto_pause_hours !== undefined ? v.auto_pause_hours : AUTO_PAUSE_DEFAULT_HOURS;
+  if (!hours) return;                                                              // owner switched auto-pause off
+  await pauseChat(vendorId, phoneFromJid(jid), hours, 'owner_reply');
+  console.log(`[Vendor ${vendorId}] Owner replied in a chat: bot paused there for ${hours}h`);
+}
+
+// Customer sent an image, voice note, video or document and no text we can read
+async function handleNonText({ sock, vendorId, vendorName, from, vendor, kind }) {
+  const key = `${vendorId}:${from}`;
+  if (Date.now() - (lastMediaNotice[key] || 0) < 10 * 60 * 1000) return;
+  lastMediaNotice[key] = Date.now();
+  const phone = phoneFromJid(from);
+  await sock.sendMessage(from, { text: "Thanks for sending that 🙏 I can't open images or voice notes yet. Please type your message, or the team will take a look shortly." });
+  const vid = parseInt(vendorId);
+  await supabase.from('notifications').insert([{
+    vendor_id: vid, type: 'handoff', message: `Contact ${phone} sent a ${kind} the bot can't read. Please check the chat.`, phone, read: false
+  }]);
+  await notifyVendorWhatsApp(vendorId, vendor, `📎 *Needs your eyes*\n\n${phone} sent a ${kind}. The bot can't read it and has asked them to type instead.\n\nOpen the chat and reply directly.`);
+}
+
+function mediaKindOf(m) {
+  if (m.imageMessage) return 'image';
+  if (m.audioMessage) return 'voice note';
+  if (m.videoMessage) return 'video';
+  if (m.documentMessage) return 'document';
+  if (m.locationMessage) return 'location';
+  return null; // stickers, reactions, etc.: ignore quietly
+}
+
 async function connectVendor(vendorId, vendorName) {
   if (connections[vendorId]?.isReady) {
     console.log(`✅ Vendor ${vendorName} already connected`);
@@ -681,6 +768,15 @@ async function connectVendor(vendorId, vendorName) {
   });
 
   connections[vendorId] = { sock, isReady: false };
+
+  // Every message the bot sends is tagged with an id we remember, so we can tell it apart from the owner typing on their phone
+  const rawSend = sock.sendMessage.bind(sock);
+  sock.sendMessage = (jid, content, options = {}) => {
+    const id = options.messageId || ('3EB0' + crypto.randomBytes(9).toString('hex').toUpperCase());
+    rememberBotId(id);
+    lastBotSend[`${vendorId}:${jid}`] = Date.now();
+    return rawSend(jid, content, { ...options, messageId: id });
+  };
 
   sock.ev.on('creds.update', async () => {
     console.log(`[Auth] creds.update fired for vendor ${vendorId} — saving...`);
@@ -740,20 +836,34 @@ async function connectVendor(vendorId, vendorName) {
   });
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return;
-
     const msg = messages[0];
-    if (!msg.message || msg.key.fromMe) return;
+    if (!msg?.message) return;
+
+    // The owner typed a reply from their own phone: the bot goes quiet in that chat for a while
+    if (msg.key.fromMe) {
+      if (!isSystem(vendorId)) {
+        try { await handleOwnerTyped({ vendorId, msg }); }
+        catch (err) { console.error(`[${vendorName}] Auto-pause error:`, err.message); }
+      }
+      return;
+    }
+    if (type !== 'notify') return;
 
     const from = msg.key.remoteJid;
     if (!from) return;
     if (from === 'status@broadcast') return;
     if (from.endsWith('@newsletter')) return;
     if (from.endsWith('@broadcast')) return;
+    if (from.endsWith('@g.us')) return;   // never reply inside WhatsApp groups
 
-    const text = msg.message?.conversation ||
-                 msg.message?.extendedTextMessage?.text || '';
-    if (!text) return;
+    const m = msg.message;
+    let text = m.conversation || m.extendedTextMessage?.text || '';
+    const mediaKind = mediaKindOf(m);
+    if (!text && mediaKind) text = m.imageMessage?.caption || m.videoMessage?.caption || m.documentMessage?.caption || '';
+    if (!text && !mediaKind) return;
+    if (text && mediaKind && !isSystem(vendorId)) {
+      text += `\n[The customer also sent a ${mediaKind} that you cannot view. Say so politely and ask them to describe it in words.]`;
+    }
 
     console.log(`[${vendorName}] Message received (${text.length} chars)`);
 
@@ -784,6 +894,18 @@ async function connectVendor(vendorId, vendorName) {
       // Trial / subscription over → bot goes quiet (dashboard stays accessible)
       if (isSubscriptionExpired(vendor)) {
         console.log(`[${vendorName}] Subscription expired — bot paused`);
+        return;
+      }
+
+      // Owner paused the whole bot, or this contact is paused or ignored
+      if (await isChatSilenced(vendorId, from, vendor)) {
+        console.log(`[${vendorName}] Chat silenced: no reply`);
+        return;
+      }
+
+      // Image, voice note or document with no text: we can't read it, so say so and alert the owner
+      if (!text) {
+        await handleNonText({ sock, vendorId, vendorName, from, vendor, kind: mediaKind });
         return;
       }
 

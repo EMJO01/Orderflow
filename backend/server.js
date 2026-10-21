@@ -615,6 +615,79 @@ app.post('/vendors/:id/disconnect', auth, ownParam, async (req, res) => {
   }
 });
 
+// ─── CHAT CONTROL (pause the bot, pause or ignore a contact) ────────────────────
+
+const normPhone = p => {
+  let d = String(p || '').replace(/\D/g, '');
+  if (/^0\d{10}$/.test(d)) d = '234' + d.slice(1); // Nigerian local format -> international
+  return d;
+};
+
+app.get('/vendors/:id/chat-controls', auth, ownParam, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { data: v, error: vErr } = await supabase.from('vendors')
+    .select('bot_paused, auto_pause_hours, product_type').eq('id', id).single();
+  if (vErr || !v) return res.status(404).json({ error: 'Vendor not found' });
+
+  const { data: rows } = await supabase.from('chat_controls')
+    .select('phone, mode, paused_until, source, created_at').eq('vendor_id', id).order('created_at', { ascending: false });
+  const now = Date.now();
+  const contacts = (rows || []).filter(c => c.mode === 'ignore' || !c.paused_until || new Date(c.paused_until) > now);
+
+  let recent = [];
+  if (v.product_type === 'real_estate') {
+    const { data } = await supabase.from('leads').select('phone, name, last_contact_at')
+      .eq('vendor_id', id).order('last_contact_at', { ascending: false }).limit(15);
+    recent = (data || []).map(l => ({ phone: l.phone, label: l.name || '', last_at: l.last_contact_at }));
+  } else {
+    const { data } = await supabase.from('conversations').select('customer_phone, started_at')
+      .eq('vendor_id', id).order('started_at', { ascending: false }).limit(15);
+    recent = (data || []).map(c => ({ phone: c.customer_phone, label: '', last_at: c.started_at }));
+  }
+  res.json({
+    settings: { bot_paused: !!v.bot_paused, auto_pause_hours: v.auto_pause_hours ?? 2 },
+    contacts, recent
+  });
+});
+
+app.put('/vendors/:id/chat-settings', auth, ownParam, async (req, res) => {
+  const patch = {};
+  if (req.body.bot_paused !== undefined) patch.bot_paused = req.body.bot_paused === true;
+  if (req.body.auto_pause_hours !== undefined) {
+    const h = parseInt(req.body.auto_pause_hours);
+    if (isNaN(h) || h < 0 || h > 168) return res.status(400).json({ error: 'auto_pause_hours must be between 0 and 168' });
+    patch.auto_pause_hours = h;
+  }
+  if (!Object.keys(patch).length) return res.status(400).json({ error: 'Nothing to update' });
+  const { error } = await supabase.from('vendors').update(patch).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.post('/vendors/:id/chat-controls', auth, ownParam, async (req, res) => {
+  const phone = normPhone(req.body.phone);
+  if (phone.length < 7 || phone.length > 20) return res.status(400).json({ error: 'Enter a valid phone number with country code' });
+  const mode = req.body.mode === 'ignore' ? 'ignore' : 'pause';
+  let paused_until = null;
+  if (mode === 'pause' && req.body.hours) {
+    const h = parseInt(req.body.hours);
+    if (isNaN(h) || h < 1 || h > 24 * 90) return res.status(400).json({ error: 'hours must be between 1 and 2160' });
+    paused_until = new Date(Date.now() + h * 3600 * 1000).toISOString();
+  }
+  const { error } = await supabase.from('chat_controls').upsert(
+    [{ vendor_id: parseInt(req.params.id), phone, mode, paused_until, source: 'manual' }],
+    { onConflict: 'vendor_id,phone' });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.delete('/vendors/:id/chat-controls/:phone', auth, ownParam, async (req, res) => {
+  const { error } = await supabase.from('chat_controls').delete()
+    .eq('vendor_id', parseInt(req.params.id)).eq('phone', normPhone(req.params.phone));
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
 // ─── ORDERS (ecommerce) ─────────────────────────────────────────────────────────
 
 app.get('/orders', auth, ownQuery, async (req, res) => {

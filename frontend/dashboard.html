@@ -215,6 +215,12 @@ textarea{resize:vertical;min-height:70px;}
   .stat-value{font-size:17px;}
   .login-box{padding:28px 22px;}
 }
+.cc-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:16px;}
+.cc-title{font-size:14px;font-weight:600;margin-bottom:12px;}
+.cc-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--border);flex-wrap:wrap;}
+.cc-row:first-child{border-top:0;}
+.cc-sub{font-size:12px;color:var(--muted);margin-top:2px;}
+.cc-actions{display:flex;gap:8px;flex-wrap:wrap;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
@@ -242,6 +248,7 @@ textarea{resize:vertical;min-height:70px;}
     <nav class="nav">
       <div class="nav-item active" onclick="showPage('products',this)">👕 Products</div>
       <div class="nav-item" onclick="showPage('whatsapp',this)">💬 WhatsApp</div>
+      <div class="nav-item" onclick="showPage('chatcontrol',this)">⏸️ Chat Control</div>
       <div class="nav-item" onclick="showPage('training',this)">🧠 Bot Training</div>
       <div class="nav-item" onclick="showPage('orders',this)">🛒 Orders</div>
       <div class="nav-item" onclick="showPage('notifications',this)" id="nav-notifications">
@@ -317,6 +324,46 @@ textarea{resize:vertical;min-height:70px;}
         <div class="qr-step"><div class="qr-num">3</div><div>The bot only shows <strong>your products</strong> — completely separate from other vendors</div></div>
         <div class="qr-step"><div class="qr-num">4</div><div>Use a dedicated business number: the bot replies to every message this number receives. Keep your phone connected to the internet so the bot stays online</div></div>
       </div>
+    </div>
+
+    <div class="content" id="page-chatcontrol" style="display:none;">
+      <div class="cc-card">
+        <div class="cc-title">Bot switch</div>
+        <div class="cc-row">
+          <div><div id="cc-global-status">Loading...</div><div class="cc-sub">Pausing stops all replies and follow-ups until you resume.</div></div>
+          <button class="btn btn-ghost" id="cc-global-btn" onclick="ccToggleGlobal()">Pause bot for everyone</button>
+        </div>
+      </div>
+      <div class="cc-card">
+        <div class="cc-title">When I reply myself</div>
+        <div class="cc-sub" style="margin:-6px 0 12px;">When you type a reply to someone from your phone, the bot stays quiet in that chat for this long, so you can talk to them yourself.</div>
+        <select id="cc-auto-hours" onchange="ccSaveAuto()">
+          <option value="0">Don't pause automatically</option>
+          <option value="1">1 hour</option>
+          <option value="2">2 hours (recommended)</option>
+          <option value="6">6 hours</option>
+          <option value="24">24 hours</option>
+          <option value="72">3 days</option>
+        </select>
+      </div>
+      <div class="cc-card">
+        <div class="cc-title">Pause or ignore a contact</div>
+        <div class="form-row-2">
+          <div><input type="text" id="cc-phone" placeholder="e.g. 2348012345678"></div>
+          <div>
+            <select id="cc-mode">
+              <option value="h:2">Pause for 2 hours</option>
+              <option value="h:24">Pause for 24 hours</option>
+              <option value="h:168">Pause for 7 days</option>
+              <option value="until">Pause until I resume</option>
+              <option value="ignore">Never reply (family, friends, suppliers)</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="ccAdd()">Add</button>
+      </div>
+      <div class="cc-card"><div class="cc-title">Paused and ignored contacts</div><div id="cc-list"><div class="cc-sub">Loading...</div></div></div>
+      <div class="cc-card"><div class="cc-title">Recent chats</div><div id="cc-recent"><div class="cc-sub">Loading...</div></div></div>
     </div>
 
     <div class="content" id="page-training" style="display:none;">
@@ -529,19 +576,82 @@ const saved = localStorage.getItem('rady_vendor');
 if (saved) { vendor = JSON.parse(saved); initDashboard(); }
 
 function showPage(page, el) {
-  ['products','whatsapp','training','orders','notifications','analytics'].forEach(p => {
+  ['products','whatsapp','training','orders','notifications','analytics','chatcontrol'].forEach(p => {
     document.getElementById(`page-${p}`).style.display = 'none';
   });
   document.getElementById(`page-${page}`).style.display = 'block';
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   el.classList.add('active');
-  const titles = {products:'Products',whatsapp:'WhatsApp Bot',training:'Bot Training',orders:'Orders',notifications:'Notifications',analytics:'Analytics'};
+  const titles = {products:'Products',whatsapp:'WhatsApp Bot',training:'Bot Training',orders:'Orders',notifications:'Notifications',analytics:'Analytics',chatcontrol:'Chat Control'};
   document.getElementById('page-title').textContent = titles[page];
   document.getElementById('add-btn').style.display = page === 'products' ? 'flex' : 'none';
   if (page === 'whatsapp') checkWAStatus();
+  if (page === 'chatcontrol') loadChatControl();
   if (page === 'orders') { loadOrders(); loadStats(); }
   if (page === 'notifications') loadNotifications();
   if (page === 'analytics') loadAnalytics();
+}
+
+// ── CHAT CONTROL ─────────────────────────────────────────────────────────────
+
+let ccData = null;
+function ccWhen(c) {
+  if (c.mode === 'ignore') return 'Never replies';
+  if (!c.paused_until) return 'Paused until you resume';
+  return 'Paused until ' + new Date(c.paused_until).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+}
+async function ccCall(path, method, body) {
+  const res = await fetch(`${API}/vendors/${vendor.id}/${path}`, {
+    method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+async function loadChatControl() {
+  try { ccData = await ccCall('chat-controls', 'GET'); renderChatControl(); }
+  catch (e) { showToast('⚠️ Could not load chat controls'); }
+}
+function renderChatControl() {
+  const s = ccData.settings;
+  document.getElementById('cc-global-status').textContent = s.bot_paused ? '⏸️ The bot is paused for everyone' : '▶️ The bot is replying';
+  document.getElementById('cc-global-btn').textContent = s.bot_paused ? 'Resume bot' : 'Pause bot for everyone';
+  document.getElementById('cc-auto-hours').value = String(s.auto_pause_hours);
+  document.getElementById('cc-list').innerHTML = ccData.contacts.length
+    ? ccData.contacts.map(c => `<div class="cc-row"><div><div>+${esc(c.phone)}</div><div class="cc-sub">${esc(ccWhen(c))}${c.source === 'owner_reply' ? ' (after you replied)' : ''}</div></div>
+        <button class="btn btn-ghost" onclick="ccResume('${esc(c.phone)}')">${c.mode === 'ignore' ? 'Remove' : 'Resume'}</button></div>`).join('')
+    : '<div class="cc-sub">No paused or ignored contacts.</div>';
+  const blocked = new Set(ccData.contacts.map(c => c.phone));
+  const recent = ccData.recent.filter(r => !blocked.has(r.phone));
+  document.getElementById('cc-recent').innerHTML = recent.length
+    ? recent.map(r => `<div class="cc-row"><div><div>${esc(r.label || ('+' + r.phone))}</div><div class="cc-sub">+${esc(r.phone)}</div></div>
+        <div class="cc-actions"><button class="btn btn-ghost" onclick="ccQuick('${esc(r.phone)}','pause',24)">Pause 24h</button>
+        <button class="btn btn-ghost" onclick="ccQuick('${esc(r.phone)}','pause',0)">Pause until I resume</button></div></div>`).join('')
+    : '<div class="cc-sub">No chats yet.</div>';
+}
+async function ccToggleGlobal() {
+  try { await ccCall('chat-settings', 'PUT', { bot_paused: !ccData.settings.bot_paused }); showToast(ccData.settings.bot_paused ? '▶️ Bot resumed' : '⏸️ Bot paused'); loadChatControl(); }
+  catch (e) { showToast('⚠️ ' + e.message); }
+}
+async function ccSaveAuto() {
+  try { await ccCall('chat-settings', 'PUT', { auto_pause_hours: parseInt(document.getElementById('cc-auto-hours').value) }); showToast('✓ Saved'); loadChatControl(); }
+  catch (e) { showToast('⚠️ ' + e.message); }
+}
+async function ccAdd() {
+  const phone = document.getElementById('cc-phone').value.trim();
+  const mode = document.getElementById('cc-mode').value;
+  if (!phone) { showToast('⚠️ Enter a phone number'); return; }
+  const body = mode === 'ignore' ? { phone, mode: 'ignore' } : { phone, mode: 'pause', hours: mode.startsWith('h:') ? parseInt(mode.slice(2)) : 0 };
+  try { await ccCall('chat-controls', 'POST', body); document.getElementById('cc-phone').value = ''; showToast('✓ Added'); loadChatControl(); }
+  catch (e) { showToast('⚠️ ' + e.message); }
+}
+async function ccQuick(phone, mode, hours) {
+  try { await ccCall('chat-controls', 'POST', { phone, mode, hours }); showToast('✓ Bot paused for that chat'); loadChatControl(); }
+  catch (e) { showToast('⚠️ ' + e.message); }
+}
+async function ccResume(phone) {
+  try { await ccCall('chat-controls/' + encodeURIComponent(phone), 'DELETE'); showToast('✓ Bot will reply to them again'); loadChatControl(); }
+  catch (e) { showToast('⚠️ ' + e.message); }
 }
 
 function openPasswordModal() {

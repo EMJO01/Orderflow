@@ -6,6 +6,7 @@
   [headers.values]
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
 
 # Private areas: keep out of search results. Do NOT list these in robots.txt,
 # because a Disallow would stop search engines from ever seeing the noindex.
@@ -14,13 +15,18 @@
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
     X-Frame-Options = "DENY"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://rady-bot.onrender.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 [[headers]]
   for = "/admin*"
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
     X-Frame-Options = "DENY"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://rady-bot.onrender.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 [[headers]]
   for = "/nexua-admin*"
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
     X-Frame-Options = "DENY"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://rady-bot.onrender.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+
+# When you move to your own domain, add the new API address to connect-src in the three Content-Security-Policy lines above.

@@ -22,9 +22,12 @@ app.set('trust proxy', 1);
 // Only these sites can call the API from a browser. Add any other frontend domain here.
 const allowedOrigins = [
   'https://eminnbot.netlify.app',
-  'https://eminntech.com',        // only needed if a page on it calls this API
-  'http://localhost:5500'         // local testing, remove when you no longer need it
+  'https://eminntech.com'         // only needed if a page on it calls this API
 ];
+// New domains go in the EXTRA_ORIGINS env var (comma-separated), e.g. https://orderflow.com,https://app.orderflow.com
+(process.env.EXTRA_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean).forEach(o => allowedOrigins.push(o));
+// Local testing only: set ALLOW_LOCALHOST=1 in your local .env. Never set it on Render.
+if (process.env.ALLOW_LOCALHOST === '1') allowedOrigins.push('http://localhost:5500');
 
 app.use(cors({
   origin: (origin, cb) =>
@@ -33,10 +36,24 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'Cache-Control': 'no-store'
+  });
+  next();
+});
 app.use(express.json({ limit: '100kb' }));
 
 if (!process.env.ADMIN_PASSWORD || !process.env.JWT_SECRET) {
   console.error('WARNING: ADMIN_PASSWORD or JWT_SECRET is not set. Admin login will fail.');
+}
+
+if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
+  console.warn('WARNING: JWT_SECRET is shorter than 32 characters. Use a long random value.');
 }
 
 const TRIAL_DAYS = 3;
@@ -52,13 +69,40 @@ function readToken(req) {
   } catch { return null; }
 }
 
+// Constant-time string comparison (used for the admin password)
+function safeEqual(a, b) {
+  const ha = crypto.createHash('sha256').update(String(a ?? '')).digest();
+  const hb = crypto.createHash('sha256').update(String(b ?? '')).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
+// Every vendor token carries the vendor's token_version. Changing or resetting a password bumps the
+// version, which instantly invalidates every older token (so a stolen session dies with the password).
+// The lookup is cached for 30 seconds, and fails open if the column does not exist yet.
+const tvCache = new Map();
+async function currentTokenVersion(vendorId) {
+  const hit = tvCache.get(vendorId);
+  if (hit && Date.now() - hit.at < 30000) return hit.tv;
+  const { data } = await supabase.from('vendors').select('token_version').eq('id', vendorId).single();
+  const tv = (data && data.token_version) || 0;
+  tvCache.set(vendorId, { tv, at: Date.now() });
+  return tv;
+}
+
 // Accepts a vendor token or an admin token
-function auth(req, res, next) {
-  const p = readToken(req);
-  if (!p) return res.status(401).json({ error: 'Unauthorized' });
-  if (p.role === 'admin') { req.isAdmin = true; return next(); }
-  if (p.role === 'vendor' && p.vendor_id != null) { req.vendorId = String(p.vendor_id); return next(); }
-  res.status(401).json({ error: 'Unauthorized' });
+async function auth(req, res, next) {
+  try {
+    const p = readToken(req);
+    if (!p) return res.status(401).json({ error: 'Unauthorized' });
+    if (p.role === 'admin') { req.isAdmin = true; return next(); }
+    if (p.role === 'vendor' && p.vendor_id != null) {
+      const tv = await currentTokenVersion(String(p.vendor_id));
+      if ((p.tv || 0) !== tv) return res.status(401).json({ error: 'Session expired. Please log in again.' });
+      req.vendorId = String(p.vendor_id);
+      return next();
+    }
+    res.status(401).json({ error: 'Unauthorized' });
+  } catch (e) { res.status(500).json({ error: 'Auth check failed' }); }
 }
 
 const forbid = res => res.status(403).json({ error: 'Forbidden' });
@@ -321,9 +365,10 @@ app.put('/viewings/:id', auth, ownsRow('viewings'), async (req, res) => {
 // ─── AUTH (ecommerce) ───────────────────────────────────────────────────────────
 
 app.post('/signup', async (req, res) => {
-  const { name, business_name, email, whatsapp_number, business_type, about, password, country, accepted_terms } = req.body;
-  if (!password || String(password).length < 6) return res.json({ success: false, error: 'Password must be at least 6 characters' });
+  const { name, business_name, email, whatsapp_number, business_type, about, password, country, accepted_terms, accepted_risk } = req.body;
+  if (!password || String(password).length < 8) return res.json({ success: false, error: 'Password must be at least 8 characters' });
   if (accepted_terms !== true) return res.json({ success: false, error: 'Please accept the Terms and Privacy Policy to continue' });
+  if (accepted_risk !== true) return res.json({ success: false, error: 'Please confirm you understand WhatsApp can restrict numbers' });
   const { data: existing } = await supabase.from('vendors').select('id').eq('email', email).single();
   if (existing) return res.json({ success: false, error: 'Email already registered' });
   const { data, error } = await supabase
@@ -342,9 +387,10 @@ app.post('/signup', async (req, res) => {
 // ─── AUTH (real estate) ─────────────────────────────────────────────────────────
 
 app.post('/signup-re', async (req, res) => {
-  const { name, business_name, email, whatsapp_number, about, password, country, accepted_terms } = req.body;
-  if (!password || String(password).length < 6) return res.json({ success: false, error: 'Password must be at least 6 characters' });
+  const { name, business_name, email, whatsapp_number, about, password, country, accepted_terms, accepted_risk } = req.body;
+  if (!password || String(password).length < 8) return res.json({ success: false, error: 'Password must be at least 8 characters' });
   if (accepted_terms !== true) return res.json({ success: false, error: 'Please accept the Terms and Privacy Policy to continue' });
+  if (accepted_risk !== true) return res.json({ success: false, error: 'Please confirm you understand WhatsApp can restrict numbers' });
   const { data: existing } = await supabase.from('vendors').select('id').eq('email', email).single();
   if (existing) return res.json({ success: false, error: 'Email already registered' });
 
@@ -390,7 +436,7 @@ app.post('/login', vendorLoginLimiter, async (req, res) => {
     product_type: vendor.product_type || 'ecommerce',
     plan: vendor.plan || 'trial', subscription_status: vendor.subscription_status || 'trialing',
     trial_ends_at: vendor.trial_ends_at || null,
-    token: jwt.sign({ role: 'vendor', vendor_id: vendor.id }, process.env.JWT_SECRET, { expiresIn: '30d' })
+    token: jwt.sign({ role: 'vendor', vendor_id: vendor.id, tv: vendor.token_version || 0 }, process.env.JWT_SECRET, { expiresIn: '7d' })
   }});
 });
 
@@ -407,10 +453,10 @@ app.put('/vendors/:id/bot-instructions', auth, ownParam, async (req, res) => {
 
 app.put('/vendors/:id/password', auth, ownParam, async (req, res) => {
   const { current_password, new_password } = req.body;
-  if (!new_password || String(new_password).length < 6) {
-    return res.status(400).json({ error: 'New password must be at least 6 characters' });
+  if (!new_password || String(new_password).length < 8) {
+    return res.status(400).json({ error: 'New password must be at least 8 characters' });
   }
-  const { data: vendor, error: fetchErr } = await supabase.from('vendors').select('password').eq('id', req.params.id).single();
+  const { data: vendor, error: fetchErr } = await supabase.from('vendors').select('*').eq('id', req.params.id).single();
   if (fetchErr || !vendor) return res.status(404).json({ error: 'Vendor not found' });
 
   const stored = vendor.password || '';
@@ -419,9 +465,14 @@ app.put('/vendors/:id/password', auth, ownParam, async (req, res) => {
   if (!ok) return res.status(401).json({ error: 'Current password is incorrect' });
 
   const hash = await bcrypt.hash(String(new_password), 10);
-  const { error } = await supabase.from('vendors').update({ password: hash }).eq('id', req.params.id);
+  const hasTv = Object.prototype.hasOwnProperty.call(vendor, 'token_version');
+  const newTv = (vendor.token_version || 0) + 1;
+  const patch = hasTv ? { password: hash, token_version: newTv } : { password: hash };
+  const { error } = await supabase.from('vendors').update(patch).eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
+  tvCache.delete(String(req.params.id));
+  // All older sessions are now invalid; hand this browser a fresh token so the owner stays signed in here
+  res.json({ success: true, token: jwt.sign({ role: 'vendor', vendor_id: vendor.id, tv: hasTv ? newTv : 0 }, process.env.JWT_SECRET, { expiresIn: '7d' }) });
 });
 
 // ─── LEAD IMPORT API KEY ────────────────────────────────────────────────────────
@@ -447,7 +498,7 @@ const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
 app.post('/admin/login', loginLimiter, (req, res) => {
   if (!process.env.ADMIN_PASSWORD || !process.env.JWT_SECRET)
     return res.status(500).json({ error: 'Server auth is not configured' });
-  if (req.body.password !== process.env.ADMIN_PASSWORD)
+  if (!safeEqual(req.body.password, process.env.ADMIN_PASSWORD))
     return res.status(401).json({ error: 'Incorrect password' });
   const token = jwt.sign({ role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '8h' });
   res.json({ token });
@@ -516,8 +567,12 @@ app.put('/admin/vendors/:id', async (req, res) => {
 app.post('/admin/vendors/:id/reset-password', async (req, res) => {
   const tempPassword = crypto.randomBytes(6).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
   const hash = await bcrypt.hash(tempPassword, 10);
-  const { error } = await supabase.from('vendors').update({ password: hash }).eq('id', req.params.id);
+  const { data: cur } = await supabase.from('vendors').select('*').eq('id', req.params.id).single();
+  const hasTv = !!cur && Object.prototype.hasOwnProperty.call(cur, 'token_version');
+  const patch = hasTv ? { password: hash, token_version: (cur.token_version || 0) + 1 } : { password: hash };
+  const { error } = await supabase.from('vendors').update(patch).eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
+  tvCache.delete(String(req.params.id)); // every existing session for this vendor is now logged out
   res.json({ success: true, temp_password: tempPassword });
 });
 
@@ -530,6 +585,20 @@ app.put('/admin/vendors/:id/activate-plan', async (req, res) => {
     plan, subscription_status: 'active', trial_ends_at: periodEnd, trial_warning_sent_at: null
   }).eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
+
+  // Best effort: record the first activation date (starts the 7-day refund window) and send the owner a receipt.
+  // Failures here never undo the activation.
+  try {
+    const { data: cur } = await supabase.from('vendors').select('business_name, whatsapp_number, setup_completed_at').eq('id', req.params.id).single();
+    const firstTime = !!cur && !cur.setup_completed_at;
+    if (firstTime) await supabase.from('vendors').update({ setup_completed_at: new Date().toISOString() }).eq('id', req.params.id);
+    if (cur && cur.whatsapp_number) {
+      const until = periodEnd.slice(0, 10);
+      await notifyViaOwner(cur.whatsapp_number,
+        `✅ Payment received for *${cur.business_name}*. Your service is active until ${until}.` +
+        (firstTime ? ` Your setup is recorded as completed today. If WhatsApp restricts your number within 7 days, see our Refund Policy.` : ''));
+    }
+  } catch (e) { console.error('[Admin] Activation receipt error:', e.message); }
   res.json({ success: true });
 });
 

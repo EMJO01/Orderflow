@@ -499,7 +499,7 @@ textarea{resize:vertical; min-height:70px;}
 
         <label style="margin:18px 0 8px;">Your API Key</label>
         <div class="code-row">
-          <code id="io-key">Loading...</code>
+          <code id="io-key">Loading...</code> <button class="btn btn-ghost" id="io-key-toggle" onclick="toggleKey()" style="margin-left:6px">Show</button>
           <button class="btn btn-ghost" onclick="copyText('io-key')">Copy</button>
         </div>
         <div class="hint-row">
@@ -593,7 +593,7 @@ textarea{resize:vertical; min-height:70px;}
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Current Password</label><input type="password" id="pw-current" placeholder="••••••••"></div>
-      <div class="form-row"><label>New Password</label><input type="password" id="pw-new" placeholder="At least 6 characters"></div>
+      <div class="form-row"><label>New Password</label><input type="password" id="pw-new" placeholder="At least 8 characters"></div>
       <div class="form-row"><label>Confirm New Password</label><input type="password" id="pw-confirm" placeholder="Repeat new password"></div>
     </div>
     <div class="modal-footer">
@@ -1157,13 +1157,23 @@ function renderImportExample() {
     `  -d '${JSON.stringify(example, null, 2)}'`;
 }
 
+let apiKeyValue = '', apiKeyShown = false;
+function renderKey() {
+  const el = document.getElementById('io-key');
+  el.textContent = !apiKeyValue ? 'Not available'
+    : apiKeyShown ? apiKeyValue
+    : apiKeyValue.slice(0, 4) + '••••••••••••••••••••' + apiKeyValue.slice(-4);
+  document.getElementById('io-key-toggle').textContent = apiKeyShown ? 'Hide' : 'Show';
+}
+function toggleKey() { apiKeyShown = !apiKeyShown; renderKey(); }
+
 async function loadApiKey() {
   if (!vendor) return;
   renderImportExample();
   try {
     const res = await fetch(`${API}/vendors/${vendor.id}/api-key`);
     const data = await res.json();
-    document.getElementById('io-key').textContent = data.api_key || 'Not available';
+    apiKeyValue = data.api_key || ''; apiKeyShown = false; renderKey();
   } catch (e) {
     document.getElementById('io-key').textContent = 'Could not load key';
   }
@@ -1174,13 +1184,13 @@ async function regenerateApiKey() {
   try {
     const res = await fetch(`${API}/vendors/${vendor.id}/api-key/regenerate`, { method: 'POST' });
     const data = await res.json();
-    if (data.api_key) { document.getElementById('io-key').textContent = data.api_key; showToast('✓ New API key generated'); }
+    if (data.api_key) { apiKeyValue = data.api_key; apiKeyShown = true; renderKey(); showToast('✓ New API key generated. Copy it now.'); }
     else showToast('⚠️ Could not regenerate key');
   } catch (e) { showToast('⚠️ Could not regenerate key'); }
 }
 
 function copyText(id) {
-  const text = document.getElementById(id).textContent;
+  const text = id === 'io-key' ? apiKeyValue : document.getElementById(id).textContent;
   navigator.clipboard.writeText(text).then(
     () => showToast('✓ Copied to clipboard'),
     () => showToast('⚠️ Could not copy — select and copy manually')
@@ -1262,12 +1272,15 @@ async function savePassword() {
   const next    = document.getElementById('pw-new').value;
   const confirmVal = document.getElementById('pw-confirm').value;
   if (!current || !next) { showToast('⚠️ Fill in both password fields'); return; }
-  if (next.length < 6) { showToast('⚠️ New password must be at least 6 characters'); return; }
+  if (next.length < 8) { showToast('⚠️ New password must be at least 8 characters'); return; }
   if (next !== confirmVal) { showToast('⚠️ New passwords do not match'); return; }
   try {
     const res  = await fetch(`${API}/vendors/${vendor.id}/password`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ current_password: current, new_password: next }) });
     const data = await res.json();
-    if (data.success) { showToast('✅ Password updated!'); closePasswordModal(); }
+    if (data.success) {
+      if (data.token) { vendor.token = data.token; localStorage.setItem('rady_vendor_re', JSON.stringify(vendor)); }
+      showToast('✅ Password updated!'); closePasswordModal();
+    }
     else showToast('⚠️ ' + (data.error || 'Could not update password'));
   } catch(e) { showToast('⚠️ Could not reach server.'); }
 }

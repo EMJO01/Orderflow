@@ -146,7 +146,7 @@ textarea{resize:vertical;min-height:80px;}
       </div>
       <div class="form-row">
         <label>Create a Password</label>
-        <input type="password" id="f-password" placeholder="Min 6 characters">
+        <input type="password" id="f-password" placeholder="Min 8 characters">
       </div>
 
       <label style="display:flex;gap:10px;align-items:flex-start;font-size:14px">
@@ -154,6 +154,10 @@ textarea{resize:vertical;min-height:80px;}
         <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and
         <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
       </label>
+        <label style="display:flex;gap:10px;align-items:flex-start;font-size:14px;margin-top:10px">
+          <input type="checkbox" id="risk" required>
+          <span>I understand WhatsApp can restrict numbers connected to tools like this, and that the <a href="/refunds" target="_blank" rel="noopener">Refund Policy</a> says what we refund if that happens.</span>
+        </label>
 
       <button class="btn btn-primary" id="signup-btn" onclick="submitSignup()">Create My Account →</button>
 
@@ -193,8 +197,8 @@ async function submitSignup() {
     showError('Please fill in all fields');
     return;
   }
-  if (password.length < 6) {
-    showError('Password must be at least 6 characters');
+  if (password.length < 8) {
+    showError('Password must be at least 8 characters');
     return;
   }
 
@@ -203,6 +207,8 @@ async function submitSignup() {
   btn.textContent = 'Submitting...';
   document.getElementById('error-box').style.display = 'none';
   const accepted_terms = document.getElementById('terms').checked;
+  const accepted_risk = document.getElementById('risk').checked;
+  if (!accepted_risk) { showError('Please confirm you understand the WhatsApp restriction risk'); document.getElementById('signup-btn').disabled = false; document.getElementById('signup-btn').textContent = 'Create My Account →'; return; }
   if (!accepted_terms) {
     showError('You must accept the Terms and Privacy Policy');
     btn.disabled = false;
@@ -214,7 +220,7 @@ async function submitSignup() {
     const res = await fetch(`${API}/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, business_name: business, email, whatsapp_number: whatsapp, business_type: type, about, password, country, accepted_terms })
+      body: JSON.stringify({ name, business_name: business, email, whatsapp_number: whatsapp, business_type: type, about, password, country, accepted_terms, accepted_risk })
     });
     const data = await res.json();
     if (data.success) {

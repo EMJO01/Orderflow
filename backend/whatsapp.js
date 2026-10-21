@@ -185,6 +185,7 @@ async function handleEcommerce({ sock, vendorId, vendorName, from, text, vendor 
   const cleanedText   = ai.cleanReply(rawReply);
   const finalReply    = cleanedText || '✅ Order confirmed! Our team will reach out to you shortly 🙌';
 
+  await humanPause(sock, from, finalReply);
   await sock.sendMessage(from, { text: finalReply });
   console.log(`[${vendorName}] Replied (${finalReply.length} chars)`);
   addToHistory(vendorId, from, 'assistant', finalReply);
@@ -378,6 +379,7 @@ async function handleRealEstate({ sock, vendorId, vendorName, from, text, vendor
   const finalReply = cleanedText ||
     (viewingData ? '✅ Viewing request received! The agent will confirm your slot shortly 🙌' : 'Thanks for your message! 😊');
 
+  await humanPause(sock, from, finalReply);
   await sock.sendMessage(from, { text: finalReply });
   console.log(`[${vendorName}] Replied (${finalReply.length} chars)`);
   addToHistory(vendorId, from, 'assistant', finalReply);
@@ -683,9 +685,38 @@ async function getChatControl(vendorId, phone) {
 }
 
 // True when the bot must stay quiet in this chat (global pause, ignored contact, or a pause still running)
-async function isChatSilenced(vendorId, jid, vendor) {
-  if (vendor?.bot_paused) return true;
-  return controlActive(await getChatControl(vendorId, phoneFromJid(jid)));
+async function getSilence(vendorId, jid, vendor) {
+  if (vendor?.bot_paused) return { kind: 'global' };
+  const c = await getChatControl(vendorId, phoneFromJid(jid));
+  if (!controlActive(c)) return null;
+  return { kind: c.mode === 'ignore' ? 'ignore' : 'pause', control: c };
+}
+async function isChatSilenced(vendorId, jid, vendor) { return !!(await getSilence(vendorId, jid, vendor)); }
+
+// A customer wrote while the bot is paused in their chat: tell the owner, so nobody waits unseen.
+// Skipped when the owner typed in that chat in the last 15 minutes (they are clearly on it), and
+// sent at most once per 30 minutes per chat.
+const lastPauseAlert = {};
+const lastOwnerTyped = {};
+async function alertWriteDuringPause({ vendorId, vendor, from }) {
+  const key = `${vendorId}:${from}`;
+  if (Date.now() - (lastOwnerTyped[key] || 0) < 15 * 60 * 1000) return;
+  if (Date.now() - (lastPauseAlert[key] || 0) < 30 * 60 * 1000) return;
+  lastPauseAlert[key] = Date.now();
+  const phone = phoneFromJid(from);
+  await supabase.from('notifications').insert([{
+    vendor_id: parseInt(vendorId), type: 'handoff', message: `${phone} wrote while the bot is paused in that chat`, phone, read: false
+  }]);
+  await notifyVendorWhatsApp(vendorId, vendor, `⏸️ *Customer waiting*\n\n${phone} wrote while the bot is paused in that chat. Reply to them yourself, or open Chat Control and resume the bot.`);
+}
+
+// Show "typing..." for a moment before a bot reply, like a person would
+async function humanPause(sock, jid, text) {
+  try {
+    await sock.sendPresenceUpdate('composing', jid);
+    await new Promise(r => setTimeout(r, Math.min(900 + String(text).length * 18, 3500)));
+    await sock.sendPresenceUpdate('paused', jid);
+  } catch (e) { /* presence is cosmetic; never block a reply */ }
 }
 
 async function pauseChat(vendorId, phone, hours, source) {
@@ -704,6 +735,7 @@ async function handleOwnerTyped({ vendorId, msg }) {
   const jid = msg.key.remoteJid;
   if (!jid || jid === 'status@broadcast' || jid.endsWith('@g.us') || jid.endsWith('@broadcast') || jid.endsWith('@newsletter')) return;
   if (botSent.has(msg.key.id)) return;                                           // the bot's own message
+  lastOwnerTyped[`${vendorId}:${jid}`] = Date.now();
   if (Date.now() - (lastBotSend[`${vendorId}:${jid}`] || 0) < 8000) return;       // echo of something the bot just sent
   const ts = Number(msg.messageTimestamp?.toString?.() ?? msg.messageTimestamp ?? 0) * 1000;
   if (ts && Date.now() - ts > 60 * 1000) return;                                  // old history, not a live reply
@@ -898,8 +930,10 @@ async function connectVendor(vendorId, vendorName) {
       }
 
       // Owner paused the whole bot, or this contact is paused or ignored
-      if (await isChatSilenced(vendorId, from, vendor)) {
-        console.log(`[${vendorName}] Chat silenced: no reply`);
+      const silence = await getSilence(vendorId, from, vendor);
+      if (silence) {
+        console.log(`[${vendorName}] Chat silenced (${silence.kind}): no reply`);
+        if (silence.kind === 'pause') await alertWriteDuringPause({ vendorId, vendor, from });
         return;
       }
 

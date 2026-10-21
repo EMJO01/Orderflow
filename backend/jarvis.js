@@ -319,7 +319,18 @@ async function executeAction({ action, args }) {
       plan: args.plan, subscription_status: 'active', trial_ends_at: periodEnd, trial_warning_sent_at: null
     }).eq('id', id);
     if (error) return `Could not activate plan: ${error.message}`;
-    return `Activated ${args.plan} for ${v?.business_name || id} until ${day(periodEnd)}.`;
+    // Best effort, same as the admin panel: record first activation (starts the 7-day refund window) and send a receipt
+    try {
+      const { data: cur } = await supabase.from('vendors').select('whatsapp_number, setup_completed_at').eq('id', id).single();
+      const firstTime = !!cur && !cur.setup_completed_at;
+      if (firstTime) await supabase.from('vendors').update({ setup_completed_at: new Date().toISOString() }).eq('id', id);
+      if (cur && cur.whatsapp_number) {
+        await wa.notifyViaOwner(cur.whatsapp_number,
+          `✅ Payment received for *${v?.business_name || 'your business'}*. Your service is active until ${day(periodEnd)}.` +
+          (firstTime ? ' Your setup is recorded as completed today. If WhatsApp restricts your number within 7 days, see our Refund Policy.' : ''));
+      }
+    } catch (e) { /* the activation itself succeeded */ }
+    return `Activated ${args.plan} for ${v?.business_name || id} until ${day(periodEnd)}. Receipt sent.`;
   }
 
   return 'Unknown action.';

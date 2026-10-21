@@ -126,6 +126,10 @@ textarea{resize:vertical; min-height:64px;}
           <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and
           <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
         </label>
+        <label style="display:flex;gap:10px;align-items:flex-start;font-size:14px;margin-top:10px">
+          <input type="checkbox" id="risk" required>
+          <span>I understand WhatsApp can restrict numbers connected to tools like this, and that the <a href="/refunds" target="_blank" rel="noopener">Refund Policy</a> says what we refund if that happens.</span>
+        </label>
         <button class="btn btn-gold" id="submit-btn" onclick="doSignup()">Start free trial</button>
         <div class="hint" style="text-align:center;margin-top:14px;">By signing up you agree to be contacted about your trial and account status.</div>
       </form>
@@ -164,11 +168,13 @@ async function doSignup() {
     showMsg('Please fill in all required fields.', 'error');
     return;
   }
-  if (password.length < 6) {
-    showMsg('Password should be at least 6 characters.', 'error');
+  if (password.length < 8) {
+    showMsg('Password should be at least 8 characters.', 'error');
     return;
   }
   const accepted_terms = document.getElementById('terms').checked;
+  const accepted_risk = document.getElementById('risk').checked;
+  if (!accepted_risk) { showMsg('Please confirm you understand the WhatsApp restriction risk.', 'error'); return; }
   if (!accepted_terms) {
     showMsg('You must accept the Terms and Privacy Policy.', 'error');
     return;
@@ -184,7 +190,7 @@ async function doSignup() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name, business_name: business, email,
-        whatsapp_number: whatsapp, country, password, about, accepted_terms
+        whatsapp_number: whatsapp, country, password, about, accepted_terms, accepted_risk
       })
     });
     const data = await res.json();

@@ -486,7 +486,7 @@ textarea{resize:vertical;min-height:70px;}
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Current Password</label><input type="password" id="pw-current" placeholder="••••••••"></div>
-      <div class="form-row"><label>New Password</label><input type="password" id="pw-new" placeholder="At least 6 characters"></div>
+      <div class="form-row"><label>New Password</label><input type="password" id="pw-new" placeholder="At least 8 characters"></div>
       <div class="form-row"><label>Confirm New Password</label><input type="password" id="pw-confirm" placeholder="Repeat new password"></div>
     </div>
     <div class="modal-footer">
@@ -665,12 +665,15 @@ async function savePassword() {
   const next    = document.getElementById('pw-new').value;
   const confirmVal = document.getElementById('pw-confirm').value;
   if (!current || !next) { showToast('⚠️ Fill in both password fields'); return; }
-  if (next.length < 6) { showToast('⚠️ New password must be at least 6 characters'); return; }
+  if (next.length < 8) { showToast('⚠️ New password must be at least 8 characters'); return; }
   if (next !== confirmVal) { showToast('⚠️ New passwords do not match'); return; }
   try {
     const res  = await fetch(`${API}/vendors/${vendor.id}/password`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ current_password: current, new_password: next }) });
     const data = await res.json();
-    if (data.success) { showToast('✅ Password updated!'); closePasswordModal(); }
+    if (data.success) {
+      if (data.token) { vendor.token = data.token; localStorage.setItem('rady_vendor', JSON.stringify(vendor)); }
+      showToast('✅ Password updated!'); closePasswordModal();
+    }
     else showToast('⚠️ ' + (data.error || 'Could not update password'));
   } catch(e) { showToast('⚠️ Could not reach server.'); }
 }

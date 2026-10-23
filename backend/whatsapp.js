@@ -120,30 +120,11 @@ async function notifyViaOwner(toNumber, message) {
   }
 }
 
-// Handles inbound messages to the 'owner' connection. This number currently
-// doubles as Joanna's general/personal number, so it's reachable by anyone,
-// not just admins — this handler is intentionally static and inert. It must
-// NEVER call handleEcommerce or handleRealEstate: those pull a vendor's
-// catalog and can create orders, and 'owner' has no vendor row to scope to,
-// which previously meant it silently pulled every vendor's products into one
-// catalog and created orphaned orders with no vendor attached.
-//
-// This is a placeholder until a dedicated OrderFlow support number exists.
-// Jarvis (admin command/query access) will be a SEPARATE number with its own
-// handler and a hard sender allowlist — not built here, not this number.
-async function handleOwnerNumber({ sock, from, text }) {
-  const phone = phoneFromJid(from);
-  console.log(`[Nexua] Message to owner number (${text.length} chars)`);
-  const reply =
-    "Hi! Thanks for reaching out 🙏 This number isn't a vendor's order line — " +
-    "if you're trying to order from a specific business, please message the " +
-    "WhatsApp number they gave you directly. For anything else, a team member " +
-    "will get back to you here shortly.";
-  try {
-    await sock.sendMessage(from, { text: reply });
-  } catch (err) {
-    console.error(`[Nexua] Could not reply to ${phone}:`, err.message);
-  }
+// The 'owner' connection is the Notifier: it only SENDS one-way notices (account approval, plan and
+// trial messages). It never replies to anyone. Anything sent to this number is ignored, and it must
+// NEVER call handleEcommerce or handleRealEstate (the 'owner' connection has no vendor to scope to).
+async function handleOwnerNumber() {
+  console.log('[Nexua] Message to the notifier number ignored (it only sends notices)');
 }
 
 // Admin-only. All access control lives in jarvis.js (hard allowlist), not here.

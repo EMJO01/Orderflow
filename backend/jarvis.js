@@ -293,7 +293,7 @@ async function executeAction({ action, args }) {
     if (!before.approved_notified && before.whatsapp_number) {
       const url = DASHBOARD_URLS[before.product_type] || DASHBOARD_URLS.ecommerce;
       const sent = await wa.notifyViaOwner(before.whatsapp_number,
-        `🎉 Hi! Your OrderFlow account for *${before.business_name}* has been approved and your 3-day free trial starts now. Log in here to get started: ${url}`);
+        `🎉 Hi! Your Muniva account for *${before.business_name}* has been approved and your 3-day free trial starts now. Log in here to get started: ${url}`);
       if (sent.success) {
         await supabase.from('vendors').update({ approved_notified: 'sent' }).eq('id', id);
         note = ' Approval message sent.';
@@ -435,7 +435,7 @@ async function runTool(name, input, ctx) {
 // ─── CLAUDE LOOP ─────────────────────────────────────────────────────────────
 
 function systemPrompt() {
-  return `You are Jarvis, the private admin assistant for Nexua's OrderFlow (ecommerce) and OrderFlow RE (real estate) platform. You are talking to the platform owner over WhatsApp.
+  return `You are Jarvis, the private admin assistant for Nexua's Muniva (ecommerce) and Muniva RE (real estate) platform. You are talking to the platform owner over WhatsApp.
 
 Today is ${new Date().toISOString().slice(0, 10)}.
 

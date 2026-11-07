@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>OrderFlow RE — Agent Dashboard</title>
+<title>Muniva RE — Agent Dashboard</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#0f1b2d">
@@ -270,7 +270,7 @@ textarea{resize:vertical; min-height:70px;}
 
 <div id="login-gate">
   <div class="login-box">
-    <div class="login-logo">OrderFlow <em>RE</em></div>
+    <div class="login-logo">Muniva <em>RE</em></div>
     <div class="login-sub">Sign in to your agent dashboard</div>
     <div class="login-error" id="login-error"></div>
     <div class="form-row"><label>Email</label><input type="text" id="login-email" placeholder="you@example.com"></div>
@@ -285,7 +285,7 @@ textarea{resize:vertical; min-height:70px;}
 <div class="shell" id="app" style="display:none;">
   <aside class="sidebar">
     <div class="logo">
-      <div class="logo-mark">OrderFlow <em>RE</em></div>
+      <div class="logo-mark">Muniva <em>RE</em></div>
       <div class="logo-sub">by Nexua</div>
     </div>
     <nav class="nav">
@@ -488,8 +488,8 @@ textarea{resize:vertical; min-height:70px;}
     <!-- INTEGRATIONS -->
     <div class="content" id="page-integrations" style="display:none;">
       <div class="training-card">
-        <div class="training-title">🔌 Send Leads Into OrderFlow</div>
-        <div class="training-sub">Connect a website form, Zapier, Make, or any automation tool. When it sends a lead here, OrderFlow saves it to your pipeline and can message them on WhatsApp right away — no manual entry.</div>
+        <div class="training-title">🔌 Send Leads Into Muniva</div>
+        <div class="training-sub">Connect a website form, Zapier, Make, or any automation tool. When it sends a lead here, Muniva saves it to your pipeline and can message them on WhatsApp right away — no manual entry.</div>
 
         <label style="margin-bottom:8px;">Webhook URL</label>
         <div class="code-row">
@@ -653,7 +653,7 @@ async function doLogin() {
     const res  = await fetch(`${API}/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ email, password: pass }) });
     const data = await res.json();
     if (!data.success) return showLoginError(data.error);
-    if (data.vendor.product_type !== 'real_estate') return showLoginError('This account is not an OrderFlow RE account.');
+    if (data.vendor.product_type !== 'real_estate') return showLoginError('This account is not a Muniva RE account.');
     vendor = data.vendor;
     localStorage.setItem('rady_vendor_re', JSON.stringify(vendor));
     initDashboard();

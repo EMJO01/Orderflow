@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Nexua OrderFlow — Vendor Dashboard</title>
+<title>Muniva — Vendor Dashboard</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#0f1b2d">
@@ -228,7 +228,7 @@ textarea{resize:vertical;min-height:70px;}
 
 <div id="login-gate">
   <div class="login-box">
-    <div class="login-logo">OrderFlow</div>
+    <div class="login-logo">Muniva</div>
     <div class="login-sub">Sign in to your vendor dashboard</div>
     <div class="login-error" id="login-error"></div>
     <div class="form-row"><label>Email</label><input type="text" id="login-email" placeholder="you@example.com"></div>
@@ -242,7 +242,7 @@ textarea{resize:vertical;min-height:70px;}
 <div class="shell" id="app" style="display:none;">
   <aside class="sidebar">
     <div class="logo">
-      <div class="logo-mark">OrderFlow</div>
+      <div class="logo-mark">Muniva</div>
       <div class="logo-sub">by Nexua</div>
     </div>
     <nav class="nav">
@@ -540,7 +540,7 @@ async function doLogin() {
     const res  = await fetch(`${API}/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ email, password: pass }) });
     const data = await res.json();
     if (!data.success) return showLoginError(data.error);
-    if (data.vendor.product_type === 'real_estate') return showLoginError('This is a real estate account. Please sign in at the OrderFlow RE dashboard instead.');
+    if (data.vendor.product_type === 'real_estate') return showLoginError('This is a real estate account. Please sign in at the Muniva RE dashboard instead.');
     vendor = data.vendor;
     localStorage.setItem('rady_vendor', JSON.stringify(vendor));
     initDashboard();

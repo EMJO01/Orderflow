@@ -24,7 +24,7 @@ const allowedOrigins = [
   'https://eminnbot.netlify.app',
   'https://eminntech.com'         // only needed if a page on it calls this API
 ];
-// New domains go in the EXTRA_ORIGINS env var (comma-separated), e.g. https://orderflow.com,https://app.orderflow.com
+// New domains go in the EXTRA_ORIGINS env var (comma-separated), e.g. https://muniva.com,https://app.muniva.com
 (process.env.EXTRA_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean).forEach(o => allowedOrigins.push(o));
 // Local testing only: set ALLOW_LOCALHOST=1 in your local .env. Never set it on Render.
 if (process.env.ALLOW_LOCALHOST === '1') allowedOrigins.push('http://localhost:5500');
@@ -278,7 +278,7 @@ app.get('/leads/pipeline-summary', auth, ownQuery, async (req, res) => {
 app.post('/leads/import', importLimiter, apiKeyAuth, async (req, res) => {
   const vendor = req.leadVendor;
   if (vendor.product_type !== 'real_estate') {
-    return res.status(400).json({ error: 'Lead import is only available for OrderFlow RE accounts' });
+    return res.status(400).json({ error: 'Lead import is only available for Muniva RE accounts' });
   }
 
   const b = req.body;
@@ -553,7 +553,7 @@ app.put('/admin/vendors/:id', async (req, res) => {
   if (active === true && before && !before.active && !before.approved_notified && before.whatsapp_number) {
     const dashboardUrl = DASHBOARD_URLS[before.product_type] || DASHBOARD_URLS.ecommerce;
     const sent = await notifyViaOwner(before.whatsapp_number,
-      `🎉 Hi! Your OrderFlow account for *${before.business_name}* has been approved and your ${TRIAL_DAYS}-day free trial starts now. Log in here to get started: ${dashboardUrl}`);
+      `🎉 Hi! Your Muniva account for *${before.business_name}* has been approved and your ${TRIAL_DAYS}-day free trial starts now. Log in here to get started: ${dashboardUrl}`);
     if (sent.success) await supabase.from('vendors').update({ approved_notified: 'sent' }).eq('id', req.params.id);
     else console.error(`[Admin] Approval notification failed for vendor ${req.params.id}:`, sent.error);
   }
@@ -958,7 +958,7 @@ app.get('/analytics-re/leads-over-time', auth, ownQuery, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 app.use('/webhook', require('./webhook'));
-app.get('/', (req, res) => res.json({ message: 'Nexua OrderFlow server running!' }));
+app.get('/', (req, res) => res.json({ message: 'Muniva server running!' }));
 
 async function reconnectActiveVendors() {
   try {
@@ -973,7 +973,7 @@ async function reconnectActiveVendors() {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Nexua OrderFlow server running on port ${PORT}`);
+  console.log(`Muniva server running on port ${PORT}`);
   reconnectActiveVendors();
   connectVendor('owner', 'Nexua Notifications'); // no-op until scanned once from admin
   connectVendor('jarvis', 'Jarvis');             // no-op until scanned once

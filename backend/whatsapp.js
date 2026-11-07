@@ -1,6 +1,7 @@
 const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const crypto = require('crypto');
+const pino = require('pino');
 const { useSupabaseAuthState } = require('./auth-supabase');
 const supabase = require('./db');
 const ai = require('./ai');
@@ -609,8 +610,8 @@ async function checkTrialWarnings() {
 
       const daysLeft = Math.max(0, Math.ceil((new Date(vendor.trial_ends_at) - new Date()) / (24 * 3600 * 1000)));
       const message = daysLeft > 0
-        ? `⏰ Hi! Your OrderFlow plan for *${vendor.business_name}* ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}. Renew to keep your WhatsApp bot running without interruption.`
-        : `⚠️ Your OrderFlow plan for *${vendor.business_name}* has ended and your bot has paused. Renew any time to bring it back online.`;
+        ? `⏰ Hi! Your Muniva plan for *${vendor.business_name}* ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}. Renew to keep your WhatsApp bot running without interruption.`
+        : `⚠️ Your Muniva plan for *${vendor.business_name}* has ended and your bot has paused. Renew any time to bring it back online.`;
 
       const sent = await notifyViaOwner(vendor.whatsapp_number, message);
       if (sent.success) {
@@ -775,6 +776,7 @@ async function connectVendor(vendorId, vendorName) {
     auth: state,
     ...(version ? { version } : {}),
     printQRInTerminal: false,
+    logger: pino({ level: 'warn' }), // Baileys' default logs every connection detail as JSON; keep only warnings and errors
     syncFullHistory: false,
     connectTimeoutMs: 60000,
     retryRequestDelayMs: 2000
